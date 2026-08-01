@@ -1,6 +1,6 @@
 # Per-exchange Python packages
 
-`import ccxt` runs `python/ccxt/__init__.py`, which imports all ~105 exchanges. An
+`import ccxt` runs `python/ccxt/__init__.py`, which imports all 104 exchanges. An
 application that talks to one venue pays for all of them — import time, resident
 memory, and the review surface of every exchange module it will never call.
 
@@ -37,7 +37,7 @@ The API inside each package is byte-for-byte the upstream implementation, so
 
 ```console
 $ python python/split/split_packages.py --out python/split-dist
-generated 109 packages into python/split-dist
+generated 116 packages into python/split-dist
 
 $ python python/split/verify_packages.py --out python/split-dist --compare-upstream
 verified 108 exchange packages
@@ -50,6 +50,7 @@ Useful flags:
 | `--only binance,okx` | generate a subset; parent exchanges are pulled in automatically |
 | `--build` | also run `python -m build`, producing wheels and sdists |
 | `--dist-prefix` / `--module-prefix` | rename `ccxt-`/`ccxt_` if PyPI names are taken |
+| `--vendored core` | keep the vendored trees inside `ccxt-core` instead of splitting them out |
 | `--source` | split a different checkout of `python/ccxt` |
 
 Publishing is the usual `twine` invocation over the built distributions:
