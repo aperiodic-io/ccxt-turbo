@@ -9,10 +9,21 @@ and the parent exchanges it declares. That last assertion is the whole point of
 the split: a leak shows up as an extra module name, not as a slow import nobody
 notices.
 
+ccxt-core reaches the vendored third-party trees from *inside* base methods, so
+importing a package proves nothing about them - a package missing one of those
+distributions would fail only once a user signed an order. So for each exchange
+this also executes the vendored import statements from the base methods that
+package actually calls, in a child that can see only its declared dependencies.
+
+``--compare-upstream`` additionally asserts, against the monolithic package in
+the same interpreter, that ``describe()``, the attribute surface and the MRO of
+every generated class match upstream exactly.
+
 Usage::
 
     python python/split/verify_packages.py --out python/split-dist
     python python/split/verify_packages.py --out python/split-dist --only binance,okx
+    python python/split/verify_packages.py --out python/split-dist --compare-upstream
 """
 
 from __future__ import annotations
@@ -109,7 +120,7 @@ print(json.dumps({"failures": failures, "external": external}))
 '''
 
 
-def lazy_vendor_imports(out_dir: Path, module_prefix: str) -> Dict[str, List[str]]:
+def lazy_vendor_imports(out_dir: Path, manifest: dict) -> Dict[str, List[str]]:
     """Map each ccxt-core method to the vendored import statements it runs.
 
     ccxt-core reaches the vendored trees from inside a handful of methods, so
@@ -117,7 +128,8 @@ def lazy_vendor_imports(out_dir: Path, module_prefix: str) -> Dict[str, List[str
     until a user signed an order. Collecting the statements lets the verifier
     run them itself.
     """
-    core = out_dir / (module_prefix.replace('_', '-') + 'core')
+    module_prefix = manifest['module_prefix']
+    core = out_dir / (manifest['dist_prefix'] + 'core')
     statements: Dict[str, List[str]] = {}
     for path in sorted(core.rglob('*.py')):
         text = path.read_text(encoding='utf-8')
@@ -187,7 +199,7 @@ def verify(out_dir: Path, only: Optional[Sequence[str]] = None, jobs: int = 8,
     upstream_environment = dict(environment)
     upstream_environment['PYTHONPATH'] = os.pathsep.join(roots + [str(REPO_ROOT / 'python')])
 
-    lazy = lazy_vendor_imports(out_dir, manifest['module_prefix'])
+    lazy = lazy_vendor_imports(out_dir, manifest)
 
     def run(probe: str, package: dict, env: Dict[str, str]) -> subprocess.CompletedProcess:
         command = [python, '-c', probe, package['module'], package['exchange'], ','.join(package['flavours'])]
