@@ -18,13 +18,15 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Set
+from typing import Dict, Iterable, List, Optional, Sequence, Set
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -84,6 +86,69 @@ print(json.dumps({"differences": differences}))
 '''
 
 
+# Runs inside the child interpreter: execute the lazy import statements that a
+# base method would run, proving they resolve against the declared dependencies.
+LAZY_IMPORT_PROBE = r'''
+import json, sys
+
+statements = json.loads(sys.argv[1])
+prefix = sys.argv[2]
+failures, external = [], []
+for statement in statements:
+    try:
+        exec(statement, {})
+    except ImportError as error:
+        missing = getattr(error, "name", "") or ""
+        # a third-party module that ccxt itself does not declare (google.protobuf,
+        # say) is missing upstream too, so it is not something the split can fix
+        bucket = failures if missing.split(".")[0].startswith(prefix) else external
+        bucket.append("%s -> %s" % (statement.strip(), error))
+    except Exception:
+        pass  # the vendored module loaded; anything else is not our problem
+print(json.dumps({"failures": failures, "external": external}))
+'''
+
+
+def lazy_vendor_imports(out_dir: Path, module_prefix: str) -> Dict[str, List[str]]:
+    """Map each ccxt-core method to the vendored import statements it runs.
+
+    ccxt-core reaches the vendored trees from inside a handful of methods, so
+    nothing here executes on import and a broken rewrite would stay invisible
+    until a user signed an order. Collecting the statements lets the verifier
+    run them itself.
+    """
+    core = out_dir / (module_prefix.replace('_', '-') + 'core')
+    statements: Dict[str, List[str]] = {}
+    for path in sorted(core.rglob('*.py')):
+        text = path.read_text(encoding='utf-8')
+        if module_prefix + 'core_' not in text:
+            continue
+        lines = text.splitlines()
+        for class_node in [n for n in ast.parse(text).body if isinstance(n, ast.ClassDef)]:
+            for method in [n for n in class_node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+                found = [
+                    '\n'.join(lines[node.lineno - 1:node.end_lineno]).strip()
+                    for node in ast.walk(method)
+                    if isinstance(node, ast.ImportFrom) and (node.module or '').startswith(module_prefix + 'core_')
+                ]
+                if found:
+                    statements.setdefault(method.name, []).extend(found)
+    return statements
+
+
+def _camel(name: str) -> str:
+    head, *rest = name.split('_')
+    return head + ''.join(word.capitalize() for word in rest)
+
+
+def methods_called_by(out_dir: Path, package: dict, names: Iterable[str]) -> List[str]:
+    """Which of ``names`` the generated exchange package calls on ``self``."""
+    text = '\n'.join(path.read_text(encoding='utf-8')
+                     for path in (out_dir / package['dist']).rglob('*.py'))
+    return [name for name in names
+            if re.search(r'\bself\.(%s|%s)\b' % (re.escape(name), re.escape(_camel(name))), text)]
+
+
 def load_manifest(out_dir: Path) -> dict:
     manifest_path = out_dir / 'manifest.json'
     if not manifest_path.is_file():
@@ -122,9 +187,33 @@ def verify(out_dir: Path, only: Optional[Sequence[str]] = None, jobs: int = 8,
     upstream_environment = dict(environment)
     upstream_environment['PYTHONPATH'] = os.pathsep.join(roots + [str(REPO_ROOT / 'python')])
 
+    lazy = lazy_vendor_imports(out_dir, manifest['module_prefix'])
+
     def run(probe: str, package: dict, env: Dict[str, str]) -> subprocess.CompletedProcess:
         command = [python, '-c', probe, package['module'], package['exchange'], ','.join(package['flavours'])]
         return subprocess.run(command, capture_output=True, text=True, env=env)
+
+    def check_lazy_imports(package: dict) -> Optional[str]:
+        """The vendored trees load from inside base methods, so import-time success proves nothing."""
+        called = methods_called_by(out_dir, package, lazy)
+        statements = sorted({s for name in called for s in lazy[name]})
+        if not statements:
+            return None
+        # only what this package declares - a missing dependency has to fail here
+        closure = module_closure(manifest, package['dist'])
+        allowed = dict(environment)
+        allowed['PYTHONPATH'] = os.pathsep.join(
+            str(out_dir / p['dist']) for p in manifest['packages'] if p['module'] in closure)
+        completed = subprocess.run(
+            [python, '-c', LAZY_IMPORT_PROBE, json.dumps(statements), manifest['module_prefix']],
+            capture_output=True, text=True, env=allowed)
+        if completed.returncode != 0:
+            return '%s: lazy import probe crashed\n%s' % (package['dist'], completed.stderr.strip()[-1500:])
+        report = json.loads(completed.stdout.strip().splitlines()[-1])
+        if report['failures']:
+            return '%s: vendored code it calls is not installable: %s' % (
+                package['dist'], '; '.join(report['failures']))
+        return None
 
     def check(package: dict) -> Optional[str]:
         completed = run(PROBE, package, environment)
@@ -137,6 +226,9 @@ def verify(out_dir: Path, only: Optional[Sequence[str]] = None, jobs: int = 8,
             return '%s: leaked unrelated packages %s' % (package['dist'], leaked)
         if len(report['checks']) != len(package['flavours']):
             return '%s: only checked %s of %s' % (package['dist'], report['checks'], package['flavours'])
+        lazy_failure = check_lazy_imports(package)
+        if lazy_failure:
+            return lazy_failure
         if not compare_upstream:
             return None
         completed = run(EQUIVALENCE_PROBE, package, upstream_environment)

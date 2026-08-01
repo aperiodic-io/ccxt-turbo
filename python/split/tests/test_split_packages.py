@@ -26,7 +26,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # hyperliquid- the only id present in all four flavours, including prediction
 # kalshi     - prediction-only, so it has no top-level exchange class
 # bit2c      - a small sync/async exchange, cheap coverage of the common case
-SUBSET = ['binance', 'binanceus', 'hyperliquid', 'kalshi', 'bit2c']
+# paradex    - reaches the heaviest vendored bundle (starknet, 1.1 MB)
+SUBSET = ['binance', 'binanceus', 'hyperliquid', 'kalshi', 'bit2c', 'paradex']
 
 FULL_RUN = os.environ.get('CCXT_SPLIT_FULL') == '1'
 
@@ -152,10 +153,65 @@ def test_core_ships_no_exchange_implementation(subset_tree):
     core = out_dir / 'ccxt-core' / 'ccxt_core'
     stray = [p.name for p in core.glob('*.py') if p.stem != '__init__']
     assert stray == [], 'ccxt-core must contain base code only'
-    assert sorted(p.name for p in core.iterdir() if p.is_dir()) == [
-        'async_support', 'base', 'protobuf', 'static_dependencies',
-    ]
+    assert sorted(p.name for p in core.iterdir() if p.is_dir()) == ['async_support', 'base', 'static_dependencies']
     assert 'exchanges = [\n]' in (core / '__init__.py').read_text(encoding='utf-8')
+
+
+# ---------------------------------------------------------------------------
+# vendored third-party trees
+# ---------------------------------------------------------------------------
+
+
+def test_vendor_plan_groups_by_reachability(layout):
+    plan = split_packages.plan_vendoring(split_packages.SOURCE_PACKAGE, layout)
+    starknet = plan.bundles['starknet']
+    # lark exists only to parse Cairo ABIs, so it travels with starknet
+    assert 'lark' in [directory for _, directory in starknet.trees]
+    # keccak is reachable on its own as well as through ethabi, so it stays apart
+    assert plan.owner['keccak'] == 'keccak'
+    assert 'keccak' in plan.bundles['ethabi'].requires
+    assert not plan.core_dirs, 'nothing in the vendored trees is imported eagerly'
+    assert set(plan.exchange_bundles['paradex']) >= {'starknet', 'keccak'}
+    assert 'binance' not in plan.exchange_bundles
+
+
+def test_most_exchanges_need_no_vendored_code(layout):
+    plan = split_packages.plan_vendoring(split_packages.SOURCE_PACKAGE, layout)
+    assert len(plan.exchange_bundles) < len(layout.all_ids) / 3
+
+
+def test_vendored_trees_leave_core(subset_tree):
+    out_dir, packages = subset_tree
+    vendored = out_dir / 'ccxt-core' / 'ccxt_core' / 'static_dependencies'
+    assert [p.name for p in vendored.iterdir() if p.is_dir()] == []
+    assert (out_dir / 'ccxt-core-starknet' / 'ccxt_core_starknet' / 'starknet').is_dir()
+    assert '"ccxt-core-starknet==' in (out_dir / 'ccxt-paradex' / 'pyproject.toml').read_text(encoding='utf-8')
+    assert 'ccxt-core-starknet' not in (out_dir / 'ccxt-binance' / 'pyproject.toml').read_text(encoding='utf-8')
+
+
+def test_cross_bundle_relative_imports_become_absolute(subset_tree):
+    out_dir, _ = subset_tree
+    # `from ... import keccak` used to reach a sibling of starknet/; keccak now
+    # ships separately, so the relative import has to be rewritten
+    utils = out_dir / 'ccxt-core-starknet' / 'ccxt_core_starknet' / 'starknet' / 'hash' / 'utils.py'
+    assert 'from ccxt_core_keccak import keccak' in utils.read_text(encoding='utf-8')
+    # lark stays in the same bundle, so its relative import is left alone
+    parser = out_dir / 'ccxt-core-starknet' / 'ccxt_core_starknet' / 'starknet' / 'abi' / 'v1' / 'parser_transformer.py'
+    assert 'from ....lark import' in parser.read_text(encoding='utf-8')
+
+
+def test_core_offers_the_bundles_as_extras(subset_tree):
+    out_dir, _ = subset_tree
+    text = (out_dir / 'ccxt-core' / 'pyproject.toml').read_text(encoding='utf-8')
+    assert 'starknet = ["ccxt-core-starknet==' in text
+    assert text.count('all = [') == 1
+
+
+def test_vendored_can_stay_in_core(tmp_path):
+    packages = split_packages.split(out_dir=tmp_path, only=['paradex'], split_vendored=False)
+    assert [p for p in packages if p.kind == 'bundle'] == []
+    assert (tmp_path / 'ccxt-core' / 'ccxt_core' / 'static_dependencies' / 'starknet').is_dir()
+    assert 'ccxt-core-starknet' not in (tmp_path / 'ccxt-paradex' / 'pyproject.toml').read_text(encoding='utf-8')
 
 
 def test_no_upstream_imports_survive(subset_tree):

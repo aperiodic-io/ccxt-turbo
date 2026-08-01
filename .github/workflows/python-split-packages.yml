@@ -61,13 +61,16 @@ jobs:
           python -m pip install twine
           twine check python/split-dist/dist/*
 
-      - name: Install a package from its wheel and use it
+      - name: Install packages from their wheels and use them
         run: |
           python -m venv /tmp/wheel-check
           # ccxt-* resolve from the built wheels; the pinned third-party
-          # dependencies of ccxt-core still come from the index
+          # dependencies of ccxt-core still come from the index.
+          # binanceus inherits from a sibling package, paradex pulls the
+          # heaviest vendored bundle - between them they cover both dependency
+          # kinds the generator emits
           /tmp/wheel-check/bin/pip install \
-            --find-links python/split-dist/dist ccxt-binanceus
+            --find-links python/split-dist/dist ccxt-binanceus ccxt-paradex
           /tmp/wheel-check/bin/python - <<'PY'
           import sys
           import ccxt_binanceus, ccxt_binanceus.pro, ccxt_core
@@ -77,6 +80,12 @@ jobs:
           loaded = sorted({m.split('.')[0] for m in sys.modules if m.startswith('ccxt')})
           assert loaded == ['ccxt_binance', 'ccxt_binanceus', 'ccxt_core'], loaded
           print('installed wheel works, loaded', loaded)
+
+          # the vendored trees are imported from inside base methods, so this is
+          # the only place a missing bundle would show up
+          import ccxt_paradex
+          ccxt_paradex.paradex().retrieve_stark_account('0x' + '1' * 64, '0x1', '0x2')
+          print('lazily imported vendored starknet code from an installed wheel')
           PY
 
       - uses: actions/upload-artifact@v4

@@ -9,11 +9,14 @@ supply-chain surface.
 
 This script mechanically rewrites the generated Python tree into:
 
-* ``ccxt-core``  -> module ``ccxt_core``: base classes, errors, ws plumbing,
-  vendored ``static_dependencies`` and ``protobuf``. No exchange code.
+* ``ccxt-core``  -> module ``ccxt_core``: base classes, errors, ws plumbing.
+  No exchange code, no vendored third-party code.
 * ``ccxt-<id>``  -> module ``ccxt_<id>``: exactly one exchange, in whichever of
   the sync / ``async_support`` / ``pro`` / ``prediction`` flavours upstream
   ships it, plus its ``abstract`` endpoint table.
+* ``ccxt-core-<lib>`` -> the vendored trees under ``static_dependencies`` and
+  ``protobuf``, which ccxt-core imports lazily, published separately so they
+  reach only the exchange packages whose call graph needs them.
 
 Exchanges that subclass another exchange (``binanceus`` -> ``binance``) declare a
 dependency on the parent distribution instead of vendoring a second copy, so
@@ -28,12 +31,14 @@ Usage::
     python python/split/split_packages.py --out python/split-dist
     python python/split/split_packages.py --out python/split-dist --only binance,okx
     python python/split/split_packages.py --out python/split-dist --build
+    python python/split/split_packages.py --out python/split-dist --vendored core
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import collections
 import io
 import json
 import os
@@ -133,6 +138,238 @@ def read_version(init_path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# vendored dependencies
+# ---------------------------------------------------------------------------
+
+# `python/ccxt/static_dependencies` and `python/ccxt/protobuf` are 1.7 MB of
+# vendored third-party code that base/exchange.py imports *inside* the handful of
+# methods that need it - starknet signing, dydx transaction encoding, msgpack,
+# keccak, and so on. Shipped in ccxt-core it would land on every install, even
+# though most exchanges never reach any of it.
+#
+# So each one is published as its own distribution and an exchange package
+# depends only on what its call graph can reach. The grouping is derived, not
+# declared: vendored directories that are reachable from exactly the same set of
+# base-method entry points travel together, which is what puts lark, marshmallow,
+# starkware and marshmallow_oneofschema in the starknet bundle while keccak -
+# reachable on its own as well as through ethabi and starknet - stays separate.
+
+VENDOR_PARENT = 'static_dependencies'
+
+
+@dataclass
+class Bundle:
+    """One optional distribution carrying vendored third-party code."""
+
+    name: str
+    # top-level directories it ships, as `(source path, module directory)`
+    trees: List[Tuple[Path, str]]
+    requires: Set[str] = field(default_factory=set)
+
+    def dist_name(self, dist_prefix: str) -> str:
+        # PyPI names are dash-separated even where the vendored directory is not
+        return '%s%s-%s' % (dist_prefix, CORE_SUFFIX, self.name.replace('_', '-'))
+
+    def module_name(self, module_prefix: str) -> str:
+        return '%s%s_%s' % (module_prefix, CORE_SUFFIX, self.name)
+
+
+@dataclass
+class VendorPlan:
+    bundles: Dict[str, Bundle]
+    # vendored directory -> the bundle that ships it
+    owner: Dict[str, str]
+    # exchange id -> bundle names it may need, closed over bundle dependencies
+    exchange_bundles: Dict[str, Set[str]]
+    # directories that stay in ccxt-core because core imports them eagerly
+    core_dirs: Set[str] = field(default_factory=set)
+
+    def bundle_of(self, directory: str) -> Optional[str]:
+        return self.owner.get(directory)
+
+
+def _resolve_relative(package: Sequence[str], level: int, module: Optional[str]) -> List[str]:
+    """Resolve a relative import to a path below ``static_dependencies``.
+
+    ``package`` is the importing module's package path relative to that
+    directory, so an empty result means the import targets a sibling of the
+    top-level vendored directories.
+    """
+    base = list(package[:len(package) - (level - 1)]) if level > 1 else list(package)
+    return base + (module.split('.') if module else [])
+
+
+def _vendor_edges(vendor_root: Path) -> Dict[str, Set[str]]:
+    """Which vendored top-level directory imports which other one."""
+    edges: Dict[str, Set[str]] = collections.defaultdict(set)
+    for path in sorted(vendor_root.rglob('*.py')):
+        parts = path.relative_to(vendor_root).parts
+        if len(parts) < 2:
+            continue
+        top, package = parts[0], list(parts[:-1])
+        try:
+            tree = ast.parse(path.read_text(encoding='utf-8'))
+        except SyntaxError:  # vendored code occasionally targets another Python
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.level:
+                target = _resolve_relative(package, node.level, node.module)
+                # `from ... import keccak` names the directory rather than the module
+                names = [target[0]] if target else [alias.name for alias in node.names]
+            elif node.module and node.module.startswith('ccxt.%s.' % VENDOR_PARENT):
+                names = [node.module.split('.')[2]]
+            else:
+                continue
+            edges[top] |= {name for name in names if name != top and (vendor_root / name).is_dir()}
+    return edges
+
+
+def _base_method_usage(source: Path) -> Tuple[Dict[str, Set[str]], Set[str]]:
+    """Map each base-Exchange method to the vendored directories it can reach.
+
+    The second element is the set of directories imported at module level, which
+    therefore cannot be made optional.
+    """
+    imports: Dict[str, Set[str]] = collections.defaultdict(set)
+    calls: Dict[str, Set[str]] = collections.defaultdict(set)
+    eager: Set[str] = set()
+
+    for relative in (Path('base') / 'exchange.py', Path('async_support') / 'base' / 'exchange.py'):
+        text = (source / relative).read_text(encoding='utf-8')
+        tree = ast.parse(text)
+        lines = text.splitlines()
+
+        for node in _module_level(tree.body):
+            if isinstance(node, ast.ImportFrom):
+                eager |= _vendor_targets(node)
+
+        for class_node in [n for n in tree.body if isinstance(n, ast.ClassDef)]:
+            for method in [n for n in class_node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+                body = '\n'.join(lines[method.lineno - 1:method.end_lineno])
+                for sub in ast.walk(method):
+                    if isinstance(sub, ast.ImportFrom):
+                        imports[method.name] |= _vendor_targets(sub)
+                calls[method.name] |= set(re.findall(r'\bself\.([a-zA-Z_][a-zA-Z_0-9]*)\b', body))
+
+    # a method also needs whatever the base methods it calls need
+    reachable: Dict[str, Set[str]] = {name: set(found) for name, found in imports.items()}
+    for name in set(calls) | set(imports):
+        reachable.setdefault(name, set())
+    changed = True
+    while changed:
+        changed = False
+        for name, callees in calls.items():
+            grown = set(reachable[name])
+            for callee in callees:
+                grown |= reachable.get(callee, set())
+            if grown != reachable[name]:
+                reachable[name] = grown
+                changed = True
+    return {name: found for name, found in reachable.items() if found}, eager
+
+
+def _module_level(body: Sequence[ast.stmt]) -> List[ast.stmt]:
+    """Statements that run on import, descending through module-level blocks."""
+    found: List[ast.stmt] = []
+    for node in body:
+        found.append(node)
+        if isinstance(node, (ast.If, ast.Try)):
+            found += _module_level(node.body + node.orelse + node.finalbody
+                                   if isinstance(node, ast.Try) else node.body + node.orelse)
+    return found
+
+
+def _vendor_targets(node: ast.ImportFrom) -> Set[str]:
+    """The vendored directories a ``from ccxt.…`` statement pulls in, if any."""
+    parts = (node.module or '').split('.')
+    if parts[:2] == ['ccxt', VENDOR_PARENT]:
+        # `from ccxt.static_dependencies.starknet.hash import x` names the
+        # directory in the path; `from ccxt.static_dependencies import keccak`
+        # names it in the import list
+        return {parts[2]} if len(parts) > 2 else {alias.name for alias in node.names}
+    if parts[:2] == ['ccxt', 'protobuf']:
+        return {'protobuf'}
+    return set()
+
+
+def _camel(name: str) -> str:
+    head, *rest = name.split('_')
+    return head + ''.join(word.capitalize() for word in rest)
+
+
+def plan_vendoring(source: Path, layout: Layout, split: bool = True) -> VendorPlan:
+    """Group the vendored trees into optional distributions and map exchanges to them."""
+    vendor_root = source / VENDOR_PARENT
+    method_dirs, eager = _base_method_usage(source)
+    entries = {directory for dirs in method_dirs.values() for directory in dirs}
+
+    if not split:
+        return VendorPlan({}, {}, {}, core_dirs=entries | eager)
+
+    edges = _vendor_edges(vendor_root)
+
+    def reachable_from(entry: str) -> Set[str]:
+        seen, pending = set(), [entry]
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            pending.extend(edges.get(current, ()))
+        return seen
+
+    reach = {entry: reachable_from(entry) for entry in entries if entry != 'protobuf'}
+
+    # directories reachable from exactly the same entry points ship together
+    signatures: Dict[frozenset, List[str]] = collections.defaultdict(list)
+    for directory in {d for found in reach.values() for d in found}:
+        if directory in eager:
+            continue
+        signatures[frozenset(e for e, found in reach.items() if directory in found)].append(directory)
+
+    bundles: Dict[str, Bundle] = {}
+    owner: Dict[str, str] = {}
+    for signature, directories in signatures.items():
+        named = sorted(set(directories) & signature) or sorted(directories)
+        bundle = Bundle(named[0], [(vendor_root / d, d) for d in sorted(directories)])
+        bundles[bundle.name] = bundle
+        owner.update({d: bundle.name for d in directories})
+    if 'protobuf' in entries and 'protobuf' not in eager:
+        bundles['protobuf'] = Bundle('protobuf', [(source / 'protobuf', 'protobuf')])
+        owner['protobuf'] = 'protobuf'
+
+    for directory, bundle_name in owner.items():
+        for target in edges.get(directory, ()):
+            if owner.get(target) not in (None, bundle_name):
+                bundles[bundle_name].requires.add(owner[target])
+
+    def close(names: Set[str]) -> Set[str]:
+        seen, pending = set(), list(names)
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            pending.extend(bundles[current].requires)
+        return seen
+
+    exchange_bundles: Dict[str, Set[str]] = {}
+    for exchange_id in layout.all_ids:
+        needed: Set[str] = set()
+        for flavour in layout.flavours_of(exchange_id):
+            relative = exchange_id + '.py' if flavour == 'sync' else '%s/%s.py' % (flavour, exchange_id)
+            text = (source / relative).read_text(encoding='utf-8')
+            for method, directories in method_dirs.items():
+                if re.search(r'\bself\.(%s|%s)\b' % (re.escape(method), re.escape(_camel(method))), text):
+                    needed |= {owner[d] for d in directories if d in owner}
+        if needed:
+            exchange_bundles[exchange_id] = close(needed)
+    return VendorPlan(bundles, owner, exchange_bundles, core_dirs=eager)
+
+
+# ---------------------------------------------------------------------------
 # import rewriting
 # ---------------------------------------------------------------------------
 
@@ -146,12 +383,19 @@ class Resolver:
     is not a module path we own (a local variable called ``ccxt``, say).
     """
 
-    def __init__(self, layout: Layout, module_prefix: str, self_module: str) -> None:
+    def __init__(self, layout: Layout, module_prefix: str, self_module: str,
+                 vendor: Optional[VendorPlan] = None) -> None:
         self.layout = layout
         self.module_prefix = module_prefix
         self.self_module = self_module
         self.core = module_prefix + CORE_SUFFIX
+        self.vendor = vendor or VendorPlan({}, {}, {})
         self.referenced: Set[str] = set()
+
+    def vendor_module(self, directory: str) -> Optional[str]:
+        """The module a vendored directory now lives in, or None if it stayed in core."""
+        bundle = self.vendor.bundle_of(directory)
+        return self.vendor.bundles[bundle].module_name(self.module_prefix) if bundle else None
 
     def _module_for(self, exchange_id: str) -> str:
         return self.module_prefix + exchange_id
@@ -167,6 +411,18 @@ class Resolver:
             return self.self_module, 0
 
         head = parts[0]
+
+        if head == VENDOR_PARENT and len(parts) > 1:
+            moved = self.vendor_module(parts[1])
+            if moved:
+                self._record(moved)
+                return '%s.%s' % (moved, parts[1]), 2
+
+        if head == 'protobuf':
+            moved = self.vendor_module('protobuf')
+            if moved:
+                self._record(moved)
+                return '%s.protobuf' % moved, 1
 
         if head in CORE_TREES:
             self._record(self.core)
@@ -262,6 +518,69 @@ def rewrite_source(source: str, resolver: Resolver) -> str:
     return _rewrite_tokens(source, resolver.resolve)
 
 
+def rewrite_vendor_statements(source: str, resolver: Resolver, package: Optional[Sequence[str]] = None) -> str:
+    """Rewrite the import forms where the target module depends on the imported name.
+
+    Two shapes need the whole statement rather than the dotted path the token
+    rewriter sees. ``from ccxt.static_dependencies import keccak, ethabi`` names
+    its directories in the import list, and those two may now live in different
+    distributions. And inside the vendored trees themselves,
+    ``from ... import keccak`` reaches a sibling directory that may have moved
+    elsewhere, so the relative import has to become an absolute one.
+
+    ``package`` is the importing module's package path below
+    ``static_dependencies``; pass None for anything outside the vendored trees.
+    """
+    if not resolver.vendor.bundles:
+        return source
+    tree = ast.parse(source)
+    lines = source.splitlines(keepends=True)
+    edits: List[Tuple[int, int, List[str]]] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        parts = (node.module or '').split('.')
+        if node.level and package is not None:
+            target = _resolve_relative(package, node.level, node.module)
+            prefix = target
+        elif not node.level and parts[:2] == ['ccxt', VENDOR_PARENT]:
+            target = parts[2:]
+            prefix = target
+        else:
+            continue
+
+        indent = ' ' * (len(lines[node.lineno - 1]) - len(lines[node.lineno - 1].lstrip()))
+        if prefix:
+            moved = resolver.vendor_module(prefix[0])
+            here = resolver.vendor_module(package[0]) if package else None
+            if not moved or moved == here:
+                continue
+            names = ', '.join(_alias(a) for a in node.names)
+            edits.append((node.lineno, node.end_lineno,
+                          ['%sfrom %s import %s\n' % (indent, '.'.join([moved] + list(prefix)), names)]))
+            continue
+
+        # the directories are the imported names, so one statement per bundle
+        grouped: Dict[str, List[ast.alias]] = collections.defaultdict(list)
+        for alias in node.names:
+            grouped[resolver.vendor_module(alias.name) or '%s.%s' % (resolver.core, VENDOR_PARENT)].append(alias)
+        here = resolver.vendor_module(package[0]) if package else None
+        if list(grouped) == [here]:
+            continue
+        replacement = ['%sfrom %s import %s\n' % (indent, module, ', '.join(_alias(a) for a in aliases))
+                       for module, aliases in sorted(grouped.items())]
+        edits.append((node.lineno, node.end_lineno, replacement))
+
+    for start, end, replacement in sorted(edits, reverse=True):
+        lines[start - 1:end] = replacement
+    return ''.join(lines)
+
+
+def _alias(alias: ast.alias) -> str:
+    return '%s as %s' % (alias.name, alias.asname) if alias.asname else alias.name
+
+
 # ---------------------------------------------------------------------------
 # __init__.py surgery
 # ---------------------------------------------------------------------------
@@ -311,10 +630,12 @@ class Package:
     exchange_id: Optional[str]
     flavours: List[str]
     requires: Set[str] = field(default_factory=set)
+    kind: str = 'exchange'
+    bundle_name: Optional[str] = None
 
     @property
     def is_core(self) -> bool:
-        return self.exchange_id is None
+        return self.kind == 'core'
 
 
 class Splitter:
@@ -325,6 +646,7 @@ class Splitter:
         source: Path = SOURCE_PACKAGE,
         dist_prefix: str = DEFAULT_DIST_PREFIX,
         module_prefix: str = DEFAULT_MODULE_PREFIX,
+        vendor: Optional[VendorPlan] = None,
     ) -> None:
         self.out_dir = out_dir
         self.layout = layout
@@ -333,36 +655,53 @@ class Splitter:
         self.module_prefix = module_prefix
         self.core_module = module_prefix + CORE_SUFFIX
         self.core_dist = dist_prefix + CORE_SUFFIX
+        self.vendor = vendor or VendorPlan({}, {}, {})
         self.metadata = tomllib.loads((REPO_ROOT / 'pyproject.toml').read_text(encoding='utf-8'))
 
     # -- helpers ----------------------------------------------------------
 
-    def _copy_rewritten(self, relative: Path, destination: Path, resolver: Resolver) -> None:
+    def _resolver(self, self_module: str) -> Resolver:
+        return Resolver(self.layout, self.module_prefix, self_module, self.vendor)
+
+    def _copy_rewritten(self, relative: Path, destination: Path, resolver: Resolver,
+                        package: Optional[Sequence[str]] = None) -> None:
         text = (self.source / relative).read_text(encoding='utf-8')
         destination.parent.mkdir(parents=True, exist_ok=True)
         if relative.suffix == '.py':
             try:
-                text = rewrite_source(text, resolver)
-            except (tokenize.TokenError, ValueError) as error:
+                text = rewrite_source(rewrite_vendor_statements(text, resolver, package), resolver)
+            except (tokenize.TokenError, SyntaxError, ValueError) as error:
                 raise SystemExit('cannot rewrite %s: %s' % (relative, error))
         destination.write_text(text, encoding='utf-8')
 
-    def _copy_tree(self, relative: Path, destination: Path, resolver: Resolver) -> None:
+    def _copy_tree(self, relative: Path, destination: Path, resolver: Resolver,
+                   vendor_root: Optional[Path] = None, skip: Sequence[str] = ()) -> None:
         for path in sorted((self.source / relative).rglob('*')):
             if path.is_dir() or '__pycache__' in path.parts:
                 continue
             child = path.relative_to(self.source)
-            self._copy_rewritten(child, destination / child.relative_to(relative), resolver)
+            tail = child.relative_to(relative)
+            if tail.parts and tail.parts[0] in skip:
+                continue
+            # inside the vendored trees, relative imports are resolved against the
+            # module's own package path, so the rewriter needs to know where it sits
+            package = list(path.relative_to(vendor_root).parts[:-1]) if vendor_root else None
+            self._copy_rewritten(child, destination / tail, resolver, package)
 
     # -- core -------------------------------------------------------------
 
     def emit_core(self) -> Package:
-        package = Package(self.core_dist, self.core_module, None, [])
+        package = Package(self.core_dist, self.core_module, None, [], kind='core')
         root = self.out_dir / self.core_dist / self.core_module
-        resolver = Resolver(self.layout, self.module_prefix, self.core_module)
+        resolver = self._resolver(self.core_module)
 
         for tree in CORE_TREES:
-            self._copy_tree(Path(tree), root / tree, resolver)
+            if tree in self.vendor.owner:  # the whole tree moved into a bundle
+                continue
+            is_vendor = tree == VENDOR_PARENT
+            moved = [d for d in self.vendor.owner if is_vendor and (self.source / tree / d).is_dir()]
+            self._copy_tree(Path(tree), root / tree, resolver,
+                            vendor_root=self.source / tree if is_vendor else None, skip=moved)
         self._copy_tree(Path('async_support') / 'base', root / 'async_support' / 'base', resolver)
 
         for source_name, target in (
@@ -377,6 +716,31 @@ class Splitter:
         self._write_project(package, root)
         return package
 
+    # -- vendored bundles -------------------------------------------------
+
+    def emit_bundle(self, bundle: Bundle) -> Package:
+        module_name = bundle.module_name(self.module_prefix)
+        package = Package(bundle.dist_name(self.dist_prefix), module_name, None, [],
+                          kind='bundle', bundle_name=bundle.name)
+        root = self.out_dir / package.dist_name / module_name
+        resolver = self._resolver(module_name)
+
+        for source_tree, directory in bundle.trees:
+            relative = source_tree.relative_to(self.source)
+            under_vendor = source_tree.parent.name == VENDOR_PARENT
+            self._copy_tree(relative, root / directory, resolver,
+                            vendor_root=source_tree.parent if under_vendor else None)
+        (root / '__init__.py').write_text(
+            '# -*- coding: utf-8 -*-\n\n'
+            '"""Vendored third-party code used by ccxt-core: %s.\n\n'
+            'Generated by python/split/split_packages.py - not a public API.\n"""\n'
+            % ', '.join(directory for _, directory in bundle.trees),
+            encoding='utf-8')
+
+        package.requires = {self.vendor.bundles[name].module_name(self.module_prefix) for name in bundle.requires}
+        self._write_project(package, root)
+        return package
+
     # -- exchanges --------------------------------------------------------
 
     def emit_exchange(self, exchange_id: str) -> Package:
@@ -384,7 +748,7 @@ class Splitter:
         module_name = self.module_prefix + exchange_id
         package = Package(self.dist_prefix + exchange_id, module_name, exchange_id, flavours)
         root = self.out_dir / package.dist_name / module_name
-        resolver = Resolver(self.layout, self.module_prefix, module_name)
+        resolver = self._resolver(module_name)
 
         for flavour in flavours:
             relative = Path(exchange_id + '.py') if flavour == 'sync' else Path(flavour) / (exchange_id + '.py')
@@ -412,26 +776,37 @@ class Splitter:
                     marker.touch()
 
         package.requires = {name for name in resolver.referenced if name != module_name}
+        # the vendored code an exchange reaches is imported lazily by ccxt-core's
+        # base methods, so it never shows up in `referenced` - see plan_vendoring
+        package.requires |= {self.vendor.bundles[name].module_name(self.module_prefix)
+                             for name in self.vendor.exchange_bundles.get(exchange_id, ())}
         self._write_project(package, root)
         return package
 
     # -- packaging metadata ----------------------------------------------
 
     def dist_for_module(self, module_name: str) -> str:
-        return self.dist_prefix + module_name[len(self.module_prefix):]
+        tail = module_name[len(self.module_prefix):]
+        if tail.startswith(CORE_SUFFIX + '_'):  # ccxt_core_dydx_v4_client -> ccxt-core-dydx-v4-client
+            tail = tail.replace('_', '-')
+        return self.dist_prefix + tail
 
     def _write_project(self, package: Package, root: Path) -> None:
         project = self.metadata['project']
         version = self.layout.version
+        pinned = ['%s==%s' % (self.dist_for_module(m), version) for m in sorted(package.requires)]
         if package.is_core:
-            description = 'ccxt base classes, errors and vendored dependencies - shared by every ccxt-<exchange> package'
+            description = 'ccxt base classes, errors and ws plumbing - shared by every ccxt-<exchange> package'
             requirements = list(project['dependencies'])
+        elif package.kind == 'bundle':
+            description = 'vendored %s, used by the ccxt exchanges that need it' % package.module_name
+            requirements = pinned
         else:
             description = 'ccxt API for the %s exchange, without the other %d exchanges' % (
                 package.exchange_id,
                 len(self.layout.all_ids) - 1,
             )
-            requirements = ['%s==%s' % (self.dist_for_module(m), version) for m in sorted(package.requires)]
+            requirements = pinned
 
         lines = [
             '# Generated by python/split/split_packages.py - do not edit by hand.',
@@ -462,8 +837,19 @@ class Splitter:
         lines += ['    %s,' % json.dumps(classifier) for classifier in project['classifiers']]
         lines += [']', 'dependencies = [']
         lines += ['    %s,' % json.dumps(requirement) for requirement in requirements]
+        lines += [']']
+        if package.is_core and self.vendor.bundles:
+            # the vendored trees are pulled in by whichever exchange package needs
+            # them; these extras let anyone calling the base methods directly ask
+            # for them by hand, e.g. `pip install ccxt-core[starknet]`
+            lines += ['', '[project.optional-dependencies]']
+            everything = []
+            for name, bundle in sorted(self.vendor.bundles.items()):
+                requirement = '%s==%s' % (bundle.dist_name(self.dist_prefix), version)
+                everything.append(requirement)
+                lines.append('%s = [%s]' % (name.replace('_', '-'), json.dumps(requirement)))
+            lines.append('all = [%s]' % ', '.join(json.dumps(r) for r in everything))
         lines += [
-            ']',
             '',
             '[project.urls]',
         ]
@@ -488,10 +874,29 @@ class Splitter:
             return (
                 '# %s\n\n'
                 'Shared runtime for the per-exchange [ccxt](https://github.com/ccxt/ccxt) packages: `Exchange`,\n'
-                '`Precise`, the error hierarchy, the WebSocket client and the vendored `static_dependencies`.\n\n'
+                '`Precise`, the error hierarchy and the WebSocket client.\n\n'
                 'It contains no exchange implementations. Install `%s<exchange>` instead - it pulls this in.\n\n'
+                'The vendored third-party code the base class imports lazily (starknet signing, dydx\n'
+                'transaction encoding, msgpack, keccak, …) ships separately, so it only lands on the\n'
+                'installs that reach it. Exchange packages depend on what they need; to pull one in by\n'
+                'hand use an extra, e.g. `pip install %s[starknet]` or `%s[all]`.\n\n'
                 'Generated from ccxt %s by `python/split/split_packages.py`.\n'
-                % (package.dist_name, self.dist_prefix, self.layout.version)
+                % (package.dist_name, self.dist_prefix, package.dist_name, package.dist_name,
+                   self.layout.version)
+            )
+        if package.kind == 'bundle':
+            bundle = self.vendor.bundles[package.bundle_name]
+            users = sorted(e for e, names in self.vendor.exchange_bundles.items() if package.bundle_name in names)
+            return (
+                '# %s\n\n'
+                'Third-party code vendored into [ccxt](https://github.com/ccxt/ccxt) and imported lazily by\n'
+                '`%s`: %s.\n\n'
+                'You do not install this directly - the %d exchange package(s) that reach it depend on it: %s.\n\n'
+                'Generated from ccxt %s by `python/split/split_packages.py`.\n'
+                % (package.dist_name, self.core_dist,
+                   ', '.join('`%s`' % directory for _, directory in bundle.trees),
+                   len(users), ', '.join(users) or 'none',
+                   self.layout.version)
             )
         entry_points = []
         if 'sync' in package.flavours:
@@ -576,6 +981,7 @@ def split(
     module_prefix: str = DEFAULT_MODULE_PREFIX,
     clean: bool = True,
     source: Path = SOURCE_PACKAGE,
+    split_vendored: bool = True,
 ) -> List[Package]:
     """Generate ``ccxt-core`` plus one distribution per exchange. Returns them."""
     layout = discover_layout(source)
@@ -583,7 +989,8 @@ def split(
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    splitter = Splitter(out_dir, layout, source, dist_prefix, module_prefix)
+    vendor = plan_vendoring(source, layout, split=split_vendored)
+    splitter = Splitter(out_dir, layout, source, dist_prefix, module_prefix, vendor)
     packages = [splitter.emit_core()]
 
     selected = list(layout.all_ids)
@@ -594,6 +1001,9 @@ def split(
         selected = [i for i in layout.all_ids if i in set(only)]
         selected = _with_parents(splitter, selected)
 
+    # always emit every bundle, even for a subset: ccxt-core's lazy imports and
+    # its extras name all of them regardless of which exchanges were selected
+    packages += [splitter.emit_bundle(bundle) for _, bundle in sorted(vendor.bundles.items())]
     packages += [splitter.emit_exchange(exchange_id) for exchange_id in selected]
 
     manifest = {
@@ -606,6 +1016,7 @@ def split(
                 'module': package.module_name,
                 'exchange': package.exchange_id,
                 'flavours': package.flavours,
+                'kind': package.kind,
                 'requires': sorted(splitter.dist_for_module(m) for m in package.requires),
             }
             for package in packages
@@ -651,6 +1062,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument('--jobs', type=int, default=min(8, (os.cpu_count() or 2)), help='parallel builds')
     parser.add_argument('--no-isolation', action='store_true',
                         help='reuse the current environment for --build instead of creating one per package')
+    parser.add_argument('--vendored', choices=['split', 'core'], default='split',
+                        help='publish the vendored third-party trees separately (default) or inside ccxt-core')
     args = parser.parse_args(argv)
 
     only = [i.strip() for i in args.only.split(',') if i.strip()] if args.only else None
@@ -661,6 +1074,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         module_prefix=args.module_prefix,
         clean=not args.no_clean,
         source=args.source,
+        split_vendored=args.vendored == 'split',
     )
     print('generated %d packages into %s' % (len(packages), args.out))
     if args.build:

@@ -8,11 +8,14 @@ memory, and the review surface of every exchange module it will never call.
 exchange, plus a shared core:
 
 ```
-ccxt-core        ->  ccxt_core       base Exchange, errors, Precise, ws client,
-                                     static_dependencies, protobuf. No exchanges.
-ccxt-binance     ->  ccxt_binance    binance, in every flavour upstream ships it
-ccxt-okx         ->  ccxt_okx        okx
-...                                  one distribution per exchange id
+ccxt-core          ->  ccxt_core            base Exchange, errors, Precise, ws
+                                            client. No exchanges, no vendored code.
+ccxt-binance       ->  ccxt_binance         binance, in every flavour upstream ships
+ccxt-okx           ->  ccxt_okx             okx
+...                                         one distribution per exchange id
+ccxt-core-starknet ->  ccxt_core_starknet   vendored third-party code, pulled in only
+ccxt-core-msgpack  ->  ccxt_core_msgpack    by the exchanges that reach it
+...
 ```
 
 ```python
@@ -81,14 +84,68 @@ tree, so the same command works on the next ccxt release without edits.
    *depends on* `ccxt-binance` rather than vendoring a second copy. Those edges
    are discovered from the imports, not from a hard-coded table. Eleven
    exchanges have a parent today.
-5. **Metadata.** Each `pyproject.toml` inherits licence, authors, classifiers
+5. **Vendored code.** `static_dependencies` and `protobuf` are 1.7 MB of
+   third-party code that `base/exchange.py` imports *inside* the few methods
+   that need it. Each goes into its own distribution, and an exchange package
+   depends only on what its call graph reaches — 82 of 108 exchanges reach none
+   of it. See below.
+6. **Metadata.** Each `pyproject.toml` inherits licence, authors, classifiers
    and `requires-python` from the root `pyproject.toml`; `ccxt-core` inherits
    the pinned runtime dependencies, and exchange packages depend only on
-   `ccxt-core` plus any parent.
+   `ccxt-core` plus any parent and vendored bundle.
 
 Because errors live in `ccxt_core`, `except ccxt_core.NetworkError` catches
 failures raised by every installed exchange package, and `isinstance` still
 works across them.
+
+## The vendored bundles
+
+`ccxt-core` would otherwise carry 1.7 MB of vendored third-party code to every
+install, most of which most exchanges never touch. Splitting it out halves the
+median single-exchange install:
+
+| distribution | ships | reached by |
+| --- | --- | ---: |
+| `ccxt-core-starknet` | starknet, starkware, marshmallow, marshmallow_oneofschema, lark | 2 exchanges |
+| `ccxt-core-dydx-v4-client` | dydx_v4_client | 1 |
+| `ccxt-core-msgpack` | msgpack | 1 |
+| `ccxt-core-protobuf` | protobuf/mexc | 1 |
+| `ccxt-core-keccak` | keccak | 25 |
+| `ccxt-core-ethabi` | ethabi | 12 |
+| `ccxt-core-lighter-client` | lighter_client | 1 |
+
+The grouping is derived rather than declared. Every vendored directory gets a
+signature — the set of `base/exchange.py` entry points that can reach it through
+the vendored import graph — and directories with the same signature ship
+together. That is why `lark`, which exists only to parse Cairo ABIs, travels
+with starknet, while `keccak`, reachable on its own as well as through `ethabi`
+and `starknet`, stays separate and is depended on by both.
+
+Which exchange needs what comes from the base-method call graph: methods are
+mapped to the vendored directories they import, closed over the `self.…` calls
+between them, then matched against each exchange module. The mapping
+over-approximates where it is unsure — an exchange that calls `hash()` gets
+`ccxt-core-keccak` (7 KB) whether or not it ever passes `'keccak'` — because an
+extra dependency is harmless and a missing one is not.
+
+Two consequences worth knowing:
+
+- Cross-bundle relative imports inside the vendored code are rewritten to
+  absolute ones. `starknet/hash/utils.py` used to reach its sibling with
+  `from ... import keccak`; it now says `from ccxt_core_keccak import keccak`.
+- Calling a base method directly that the analysis did not attribute to your
+  exchange raises `ModuleNotFoundError`. `ccxt-core` exposes each bundle as an
+  extra for that case: `pip install ccxt-core[starknet]`, or `ccxt-core[all]`
+  for the lot. `--vendored core` puts everything back inside `ccxt-core`.
+
+Because these imports run inside methods, nothing about them shows up at import
+time — so `verify_packages.py` executes them. For each exchange it collects the
+vendored import statements from the base methods that package actually calls,
+and runs them in a child interpreter that can see *only* the package's declared
+dependencies. A missing bundle fails there instead of failing a user mid-order.
+Third-party modules that ccxt itself does not declare (`google.protobuf`, needed
+by `mexc` and `dydx`) are reported separately and not treated as failures: they
+are missing from a plain `pip install ccxt` too.
 
 ## Verifying it
 
