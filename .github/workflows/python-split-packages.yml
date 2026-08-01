@@ -64,7 +64,9 @@ jobs:
       - name: Install a package from its wheel and use it
         run: |
           python -m venv /tmp/wheel-check
-          /tmp/wheel-check/bin/pip install --no-index \
+          # ccxt-* resolve from the built wheels; the pinned third-party
+          # dependencies of ccxt-core still come from the index
+          /tmp/wheel-check/bin/pip install \
             --find-links python/split-dist/dist ccxt-binanceus
           /tmp/wheel-check/bin/python - <<'PY'
           import sys
