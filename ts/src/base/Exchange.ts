@@ -5757,8 +5757,25 @@ export class BaseExchange {
     parseOrderBookBidsAsks (bidasks: any, priceKey: IndexType = 0, amountKey: IndexType = 1, countOrIdKey: IndexType = 2): Num[][] {
         bidasks = this.toArray (bidasks);
         const result: Num[][] = [];
-        for (let i = 0; i < bidasks.length; i++) {
-            result.push (this.parseOrderBookBidAsk (bidasks[i], priceKey, amountKey, countOrIdKey));
+        const length = bidasks.length;
+        let effectiveCountOrIdKey = countOrIdKey;
+        if (length > 0) {
+            const sample = bidasks[0];
+            // safeValue, not a raw index - a plain [price, amount] pair is a
+            // common level shape, and indexing past its end (eg sample[2])
+            // returns a safe empty result in JS but raises in other languages
+            if ((sample !== undefined) && (sample !== null) && (this.safeValue (sample, countOrIdKey) === undefined)) {
+                // every level in one order book snapshot shares the same shape
+                // (a plain [price, amount] pair, or an object without a
+                // count/id field, etc) - so whether countOrIdKey applies at
+                // all is checked once here instead of on every single level,
+                // since it usually doesn't apply and re-deriving that same
+                // miss per level is wasted work on a large book
+                effectiveCountOrIdKey = undefined;
+            }
+        }
+        for (let i = 0; i < length; i++) {
+            result.push (this.parseOrderBookBidAsk (bidasks[i], priceKey, amountKey, effectiveCountOrIdKey));
         }
         return result;
     }
@@ -6620,10 +6637,12 @@ export class BaseExchange {
     parseOrderBookBidAsk (bidask: any, priceKey: IndexType = 0, amountKey: IndexType = 1, countOrIdKey: IndexType = 2): Num[] {
         const price = this.safeFloat (bidask, priceKey);
         const amount = this.safeFloat (bidask, amountKey);
-        const countOrId = this.safeInteger (bidask, countOrIdKey);
         const bidAsk = [ price, amount ];
-        if (countOrId !== undefined) {
-            bidAsk.push (countOrId);
+        if (countOrIdKey !== undefined) {
+            const countOrId = this.safeInteger (bidask, countOrIdKey);
+            if (countOrId !== undefined) {
+                bidAsk.push (countOrId);
+            }
         }
         return bidAsk;
     }

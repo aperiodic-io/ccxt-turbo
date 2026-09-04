@@ -35,12 +35,10 @@ class OrderBook(dict):
     def reset(self, snapshot={}):
         self['asks']._index.clear()
         self['asks'].clear()
-        for ask in snapshot.get('asks', []):
-            self['asks'].storeArray(ask)
+        self['asks'].merge_snapshot(snapshot.get('asks', []))
         self['bids']._index.clear()
         self['bids'].clear()
-        for bid in snapshot.get('bids', []):
-            self['bids'].storeArray(bid)
+        self['bids'].merge_snapshot(snapshot.get('bids', []))
         self['nonce'] = snapshot.get('nonce')
         self['timestamp'] = snapshot.get('timestamp')
         self['datetime'] = Exchange.iso8601(self['timestamp'])
