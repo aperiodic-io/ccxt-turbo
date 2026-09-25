@@ -303,12 +303,22 @@ class hyperliquid(ccxt.async_support.hyperliquid):
         market = self.market(marketId)
         symbol = market['symbol']
         rawData = self.safe_list(entry, 'levels', [])
-        data = {
-            'bids': self.safe_list(rawData, 0, []),
-            'asks': self.safe_list(rawData, 1, []),
-        }
+        bids = self.parse_hyperliquid_book_levels(self.safe_list(rawData, 0, []))
+        asks = self.parse_hyperliquid_book_levels(self.safe_list(rawData, 1, []))
         timestamp = self.safe_integer(entry, 'time')
-        snapshot = self.parse_order_book(data, symbol, timestamp, 'bids', 'asks', 'px', 'sz')
+        # build the snapshot directly from the already-parsed [price, amount]
+        # pairs (mirrors parseOrderBook's own output shape exactly) instead
+        # of routing them back through the generic parseOrderBook /
+        # parseOrderBookBidAsk / safeFloat pipeline, which would re-parse
+        # values parseHyperliquidBookLevels has already parsed
+        snapshot = {
+            'symbol': symbol,
+            'bids': self.sort_by(bids, 0, True),
+            'asks': self.sort_by(asks, 0),
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'nonce': None,
+        }
         if not (symbol in self.orderbooks):
             ob = self.order_book(snapshot)
             self.orderbooks[symbol] = ob
@@ -316,6 +326,38 @@ class hyperliquid(ccxt.async_support.hyperliquid):
         orderbook.reset(snapshot)
         messageHash = 'orderbook:' + symbol
         client.resolve(orderbook, messageHash)
+
+    def parse_hyperliquid_book_levels(self, levels: list[object]) -> list[list[Num]]:
+        """
+ @ignore
+        converts a raw l2Book levels array(objects with "px"/"sz" numeric-string fields) into unified [price, amount] pairs
+        :param dict[] levels: raw level objects for one side of the book
+        :returns float[][]: a list of [price, amount] pairs
+        """
+        # fast path: every level is always a plain {"px": "...", "sz": "..."}
+        # object with numeric strings, so parse it directly instead of going
+        # through the generic (dict/array-agnostic, exception-tolerant)
+        # safeFloat machinery meant for arbitrary/unknown level shapes.
+        # `price !== price` is a NaN check (NaN is the only value unequal to
+        # itself, in both JS and Python) - a wrong/missing key just parses
+        # to NaN here rather than throwing, so this catches anything
+        # unexpected and falls back to the always-correct generic path for
+        # the whole batch.
+        try:
+            result = []
+            for i in range(0, len(levels)):
+                level = levels[i]
+                price = float(level['px'])
+                amount = float(level['sz'])
+                if (price != price) or (amount != amount):
+                    raise ExchangeError('unparsable hyperliquid book level')
+                result.append([price, amount])
+            return result
+        except Exception as e:
+            result = []
+            for i in range(0, len(levels)):
+                result.append([self.safe_float(levels[i], 'px'), self.safe_float(levels[i], 'sz')])
+            return result
 
     async def watch_ticker(self, symbol: str, params: dict = {}) -> Ticker:
         """

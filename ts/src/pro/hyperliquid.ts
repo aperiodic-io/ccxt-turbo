@@ -348,7 +348,7 @@ export default class hyperliquid extends hyperliquidRest {
      * @param {object[]} levels raw level objects for one side of the book
      * @returns {float[][]} a list of [price, amount] pairs
      */
-    parseHyperliquidBookLevels (levels) {
+    parseHyperliquidBookLevels (levels: any[]): Num[][] {
         // fast path: every level is always a plain {"px": "...", "sz": "..."}
         // object with numeric strings, so parse it directly instead of going
         // through the generic (dict/array-agnostic, exception-tolerant)

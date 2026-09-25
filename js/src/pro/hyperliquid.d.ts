@@ -111,7 +111,7 @@ export default class hyperliquid extends hyperliquidRest {
      * @param {object[]} levels raw level objects for one side of the book
      * @returns {float[][]} a list of [price, amount] pairs
      */
-    parseHyperliquidBookLevels(levels: any): any[];
+    parseHyperliquidBookLevels(levels: any[]): Num[][];
     /**
      * @method
      * @name hyperliquid#watchTicker

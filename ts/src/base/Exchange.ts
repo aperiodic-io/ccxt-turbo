@@ -5758,7 +5758,7 @@ export class BaseExchange {
         bidasks = this.toArray (bidasks);
         const result: Num[][] = [];
         const length = bidasks.length;
-        let effectiveCountOrIdKey = countOrIdKey;
+        let effectiveCountOrIdKey: IndexType | undefined = countOrIdKey;
         if (length > 0) {
             const sample = bidasks[0];
             // safeValue, not a raw index - a plain [price, amount] pair is a

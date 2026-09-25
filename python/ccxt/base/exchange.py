@@ -5410,11 +5410,11 @@ class BaseExchange(object):
         if length > 0:
             sample = bidasks[0]
             # safeValue, not a raw index - a plain [price, amount] pair is a
-            # common level shape, and indexing past its end(eg sample[2])
+            # common level shape, and indexing past its end (eg sample[2])
             # returns a safe empty result in JS but raises in other languages
-            if (sample is not None) and (sample != None) and (self.safe_value(sample, countOrIdKey) is None):
+            if (sample is not None) and (sample is not None) and (self.safe_value(sample, countOrIdKey) is None):
                 # every level in one order book snapshot shares the same shape
-                #(a plain [price, amount] pair, or an object without a
+                # (a plain [price, amount] pair, or an object without a
                 # count/id field, etc) - so whether countOrIdKey applies at
                 # all is checked once here instead of on every single level,
                 # since it usually doesn't apply and re-deriving that same
