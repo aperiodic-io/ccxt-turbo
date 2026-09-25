@@ -1,52 +1,18 @@
-# CCXT-turbo – a faster, performance-optimized CCXT
+# CCXT-turbo – a faster, performance-optimized CCXT for Python and Go
 
-**CCXT-turbo** is a performance-focused fork of [CCXT](https://github.com/ccxt/ccxt). It keeps CCXT's unified API and exchange coverage, and speeds up the hot paths in trading and market-data workloads: WebSocket message handling, order book maintenance, and trade and ticker parsing.
+[![Supported Exchanges](https://img.shields.io/badge/exchanges-104-blue.svg)](#supported-cryptocurrency-exchanges) [![Upstream](https://img.shields.io/badge/upstream-ccxt%2Fccxt-lightgrey.svg)](https://github.com/ccxt/ccxt)
+
+**CCXT-turbo** is a performance-focused fork of [CCXT](https://github.com/ccxt/ccxt) for **Python** and **Go**. It keeps CCXT's unified API and exchange coverage, and speeds up the hot paths in trading and market-data workloads: WebSocket message handling, order book maintenance, and trade and ticker parsing.
 
 - **Faster.** We profile the code paths that run on every message, such as `safe*` field lookups, order book snapshots and level parsing, and optimize them. Each optimization is checked against the original implementation on randomized inputs, so results do not change.
-- **Same functionality.** It is a drop-in replacement. Package names, imports, method signatures, and return structures match upstream CCXT, so existing code and the [CCXT Manual](https://github.com/ccxt/ccxt/wiki) apply without changes.
+- **Same functionality.** It is a drop-in replacement for the `ccxt` Python package and the `github.com/ccxt/ccxt/go/v4` Go module. Package names, imports, method signatures, and return structures match upstream CCXT, so existing code and the [CCXT Manual](https://github.com/ccxt/ccxt/wiki) apply without changes.
 - **Kept up to date.** This fork tracks [`ccxt/ccxt`](https://github.com/ccxt/ccxt) `master` and syncs regularly. New exchanges, endpoints, and fixes from upstream arrive here, with the performance work layered on top.
+
+CCXT-turbo ships Python and Go only. The C#, PHP, Java, Rust and JavaScript distributions are not maintained here; use [upstream CCXT](https://github.com/ccxt/ccxt) for those. The TypeScript sources in `ts/` stay in the repo, because the Python and Go code is transpiled from them.
 
 Performance work is proposed as pull requests on [aperiodic-io/ccxt-turbo](https://github.com/aperiodic-io/ccxt-turbo/pulls). Changes that aren't performance-related (new exchanges, API fixes) belong upstream at [ccxt/ccxt](https://github.com/ccxt/ccxt), and reach CCXT-turbo on the next sync.
 
----
-
-The rest of this README is the upstream CCXT documentation, which applies to CCXT-turbo as-is.
-
-[![NPM Downloads](https://img.shields.io/npm/dy/ccxt.svg)](https://www.npmjs.com/package/ccxt) [![npm](https://img.shields.io/npm/v/ccxt.svg)](https://npmjs.com/package/ccxt) [![PyPI](https://img.shields.io/pypi/v/ccxt.svg)](https://pypi.python.org/pypi/ccxt) [![NuGet version](https://img.shields.io/nuget/v/ccxt)](https://www.nuget.org/packages/ccxt) [![GoDoc](https://img.shields.io/github/v/tag/ccxt/ccxt?label=go)](https://godoc.org/github.com/ccxt/ccxt/go/v4) [![Mvn](https://badges.mvnrepository.com/badge/io.github.ccxt/ccxt/badge.svg?label=mvn)](https://mvnrepository.com/artifact/io.github.ccxt/ccxt) [![Packagist](https://img.shields.io/packagist/v/ccxt/ccxt)](https://packagist.org/packages/ccxt/ccxt) [![Crates.io](https://img.shields.io/crates/v/ccxt.svg)](https://crates.io/crates/ccxt) [![Supported Exchanges](https://img.shields.io/badge/exchanges-104-blue.svg)](https://github.com/ccxt/ccxt/wiki/Exchange-Markets) [![CCXT Chat in Telegram](https://telegram-badge.vercel.app/api/telegram-badge?channelId=@ccxt_chat&label=chat)](https://t.me/ccxt_chat) [![CCXT Discord Server](https://img.shields.io/discord/690203284119617602?logo=discord&logoColor=white)](https://discord.gg/ccxt) [![Follow CCXT at x.com](https://img.shields.io/twitter/follow/ccxt_official.svg?style=social&label=CCXT)](https://x.com/ccxt_official)
-
-A crypto trading API with more than 100 exchanges and prediction markets in JavaScript / TypeScript / Python / C# / PHP / Go / Java / Rust.
-
-### [Install](#install) · [Usage](#usage) · [Manual](https://github.com/ccxt/ccxt/wiki) · [FAQ](https://github.com/ccxt/ccxt/wiki/FAQ) · [Examples](https://github.com/ccxt/ccxt/tree/master/examples) · [Contributing](https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md) · [Disclaimer](#disclaimer) · [Social](#social)
-
-The **CCXT** library is used to connect and trade with cryptocurrency exchanges worldwide. It provides quick access to market data for storage, analysis, visualization, indicator development, algorithmic trading, strategy backtesting, bot programming, and related software engineering.
-
-It is intended to be used by **coders, developers, technically-skilled traders, data-scientists and financial analysts** for building trading algorithms.
-
-Current feature list:
-- supports 100+ cryptocurrency exchanges and prediction markets:
-  - Polymarket
-  - Kalshi
-  - Hyperliquid
-  - Limitless
-  - Myriad
-  - more coming soon!
-- implements public and private APIs, both REST and WebSocket
-- optionally normalizes data for cross-exchange analytics and arbitrage
-- has an out of the box unified API that is extremely easy to integrate
-- ideal for AI agents, LLMs and vibe coding
-- works in Node 18+, Python 3, PHP 8.1+, netstandard2.0/2.1, Go 1.20+, Java 21+ and web browsers
-
-## CCXT Terminal
-
-[![CCXT Terminal: One App. Every Market. High-performance trading with real-time sync](https://github.com/user-attachments/assets/5bfe1227-860c-45ad-b43c-884e899b70e1)](https://terminal.ccxt.com)
-
-[**CCXT Terminal**](https://terminal.ccxt.com) is a non-custodial trading platform built on the same open-source CCXT library you already use. It takes you from market analysis to order execution in one place, pairing a scalper DOM and real-time liquidity visualization with low-latency order routing across multiple exchanges.
-
-## See Also
-
-- <sub>[![Freqtrade](https://user-images.githubusercontent.com/1294454/114340585-8e35fa80-9b60-11eb-860f-4379125e2db6.png)](https://www.freqtrade.io)</sub> **[Freqtrade](https://www.freqtrade.io)** – leading opensource cryptocurrency algorithmic trading software!
-- <sub>[![OctoBot](https://user-images.githubusercontent.com/1294454/132113722-007fc092-7530-4b41-b929-b8ed380b7b2e.png)](https://www.octobot.online)</sub> **[OctoBot](https://www.octobot.online)** – cryptocurrency trading bot with an advanced web interface.
-- <sub>[![TokenBot](https://user-images.githubusercontent.com/1294454/152720975-0522b803-70f0-4f18-a305-3c99b37cd990.png)](https://tokenbot.com/?utm_source=github&utm_medium=ccxt&utm_campaign=algodevs)</sub> **[TokenBot](https://tokenbot.com/?utm_source=github&utm_medium=ccxt&utm_campaign=algodevs)** – discover and copy the best algorithmic traders in the world.
+### [Install](#install) · [Usage](#usage) · [Manual](https://github.com/ccxt/ccxt/wiki) · [FAQ](https://github.com/ccxt/ccxt/wiki/FAQ) · [Examples](examples) · [Syncing with upstream](#syncing-with-upstream) · [Disclaimer](#disclaimer)
 
 ## Certified Cryptocurrency Exchanges
 
@@ -226,82 +192,12 @@ CCXT participates in builder programs with the exchanges listed above, which mea
 
 ## Install
 
-The easiest way to install the CCXT library is to use a package manager:
-
-- [ccxt in **NPM**](https://www.npmjs.com/package/ccxt) (JavaScript / Node v7.6+)
-- [ccxt in **PyPI**](https://pypi.python.org/pypi/ccxt) (Python 3.7.0+)
-- [ccxt in **Packagist/Composer**](https://packagist.org/packages/ccxt/ccxt) (PHP 8.1+)
-- [ccxt in **Nuget**](https://www.nuget.org/packages/ccxt) (netstandard 2.0)
-- [ccxt in **GO**](https://pkg.go.dev/github.com/ccxt/ccxt/go/v4)
-- [ccxt in **Java**](https://central.sonatype.com/artifact/io.github.ccxt/ccxt) (Java 21+, Gradle)
-- [ccxt in **Crates.io**](https://crates.io/crates/ccxt) (Rust, Cargo)
-
-This library is shipped as an all-in-one module implementation with minimalistic dependencies and requirements:
-
-- [js/](https://github.com/ccxt/ccxt/blob/master/js/) in JavaScript
-- [python/](https://github.com/ccxt/ccxt/blob/master/python/) in Python (generated from TS)
-- [php/](https://github.com/ccxt/ccxt/blob/master/php/) in PHP (generated from TS)
-- [cs/](https://github.com/ccxt/ccxt/blob/master/cs/)  in C# (generated from TS)
-- [go/](https://github.com/ccxt/ccxt/blob/master/go/)  in Go (generated from TS)
-- [java/](https://github.com/ccxt/ccxt/blob/master/java/) in Java (generated from TS)
-- [rust/](https://github.com/ccxt/ccxt/blob/master/rust/) in Rust (generated from TS)
-
-You can also clone it into your project directory from [ccxt GitHub repository](https://github.com/ccxt/ccxt):
-
-```shell
-git clone https://github.com/ccxt/ccxt.git  # including 1GB of commit history
-
-# or
-
-git clone https://github.com/ccxt/ccxt.git --depth 1  # avoid downloading 1GB of commit history
-```
-
-### JavaScript (NPM)
-
-JavaScript version of CCXT works in both Node and web browsers. Requires ES6 and `async/await` syntax support (Node 7.6.0+). When compiling with Rspack (or Webpack) and Babel, make sure it is [not excluded](https://github.com/ccxt/ccxt/issues/225#issuecomment-331905178) in your `babel-loader` config.
-
-[ccxt in **NPM**](https://www.npmjs.com/package/ccxt)
-
-```shell
-npm install ccxt
-```
-
-```JavaScript
-//cjs
-var ccxt = require ('ccxt')
-console.log (ccxt.exchanges) // print all available exchanges
-```
-```Javascript
-//esm
-import {version, exchanges} from 'ccxt';
-console.log(version, Object.keys(exchanges));
-```
-
-### JavaScript (for use with the `<script>` tag):
-
-All-in-one browser bundle (dependencies included), served from a CDN of your choice:
-
-* jsDelivr: https://cdn.jsdelivr.net/npm/ccxt@4.5.84/dist/ccxt.browser.min.js
-* unpkg: https://unpkg.com/ccxt@4.5.84/dist/ccxt.browser.min.js
-
-CDNs are not updated in real-time and may have delays. Defaulting to the most recent version without specifying the version number is not recommended. Please, keep in mind that we are not responsible for the correct operation of those CDN servers.
-
-```HTML
-<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/ccxt@4.5.84/dist/ccxt.browser.min.js"></script>
-```
-
-Creates a global `ccxt` object:
-
-```JavaScript
-console.log (ccxt.exchanges) // print all available exchanges
-```
+The packages on PyPI and pkg.go.dev are upstream CCXT. To get CCXT-turbo, install from this repository.
 
 ### Python
 
-[ccxt in **PyPI**](https://pypi.python.org/pypi/ccxt)
-
 ```shell
-pip install ccxt
+pip install "git+https://github.com/aperiodic-io/ccxt-turbo.git"
 ```
 
 ```Python
@@ -309,10 +205,16 @@ import ccxt
 print(ccxt.exchanges) # print a list of all available exchange classes
 ```
 
-The library supports concurrent asynchronous mode with asyncio and async/await in Python 3.7.0+
+The library supports concurrent asynchronous mode with asyncio and async/await:
 
 ```Python
 import ccxt.async_support as ccxt # link against the asynchronous version of ccxt
+```
+
+WebSocket streaming (`watch*` methods) is available through `ccxt.pro`:
+
+```Python
+import ccxt.pro as ccxtpro
 ```
 
 #### orjson support
@@ -336,395 +238,64 @@ pip install coincurve
 
 Once installed, CCXT will automatically detect and use it.
 
-### PHP
-
-[ccxt in PHP with **Packagist/Composer**](https://packagist.org/packages/ccxt/ccxt) (PHP 8.1+)
-
-It requires common PHP modules:
-
-- cURL
-- mbstring (using UTF-8 is highly recommended)
-- PCRE
-- iconv
-- gmp
-
-```PHP
-include "ccxt.php";
-var_dump (\ccxt\Exchange::$exchanges); // print a list of all available exchange classes
-```
-
-The library supports concurrent asynchronous mode using tools from [ReactPHP](https://reactphp.org/) in PHP 8.1+. Read the [Manual](https://github.com/ccxt/ccxt/wiki/) for more details.
-
-### .net/C#
-
-[ccxt in C# with **Nuget**](https://www.nuget.org/packages/ccxt) (netstandard 2.0 and netstandard 2.1)
-```c#
-using ccxt;
-Console.WriteLine(ccxt.Exchanges) // check this later
-```
-
 ### Go
 
-[ccxt in GO with **PKG**](https://pkg.go.dev/github.com/ccxt/ccxt/go/v4)
+The module path stays `github.com/ccxt/ccxt/go/v4`, so existing imports keep working. Point it at this fork with a `replace` directive:
 
 ```shell
-go install github.com/ccxt/ccxt/go/v4@latest
+go get github.com/ccxt/ccxt/go/v4
+go mod edit -replace github.com/ccxt/ccxt/go/v4=github.com/aperiodic-io/ccxt-turbo/go/v4@master
+go mod tidy
 ```
-
-```Go
-import "ccxt"
-fmt.Println(ccxt.Exchanges)
-```
-
-### Java
-
-Java version of CCXT requires Java 21+ and uses Gradle as its build system.
-
-Add the CCXT library as a local dependency in your `build.gradle.kts`:
-
-```kotlin
-dependencies {
-    implementation("io.github.ccxt:ccxt:4.5.52")
-}
-```
-
-Or clone and build from source:
-
-```shell
-git clone https://github.com/ccxt/ccxt.git --depth 1
-cd ccxt/java
-./gradlew :lib:build
-```
-
-```Java
-import io.github.ccxt.exchanges.Binance;
-import io.github.ccxt.types.Ticker;
-
-Binance exchange = new Binance();
-exchange.loadMarkets(false);
-
-Ticker ticker = exchange.fetchTicker("BTC/USDT");
-System.out.println(ticker.symbol + " " + ticker.last);
-```
-
-Each exchange has its own typed subclass with strongly-typed return values. Every typed method ships both a blocking sync and a non-blocking `CompletableFuture`-returning async overload — pick the idiom that fits your call site:
-
-```Java
-// Sync — blocks until the response arrives
-Ticker ticker = exchange.fetchTicker("BTC/USDT");
-
-// Async — returns immediately, completes when the response arrives
-CompletableFuture<Ticker> future = exchange.fetchTickerAsync("BTC/USDT", null);
-future.thenAccept(t -> System.out.println(t.last));
-```
-
-WebSocket support is available via the pro exchange classes, with the same sync/async symmetry — `watchTicker` blocks for one update; `watchTickerAsync` returns a `CompletableFuture<Ticker>` you can compose:
-
-```Java
-import io.github.ccxt.exchanges.pro.Binance;
-
-var exchange = new Binance();
-exchange.loadMarkets(false);
-
-// Sync — blocks for one update
-Ticker tick = exchange.watchTicker("BTC/USDT");
-
-// Async — returns a typed CompletableFuture (composable with allOf, anyOf, etc.)
-CompletableFuture<Ticker> future = exchange.watchTickerAsync("BTC/USDT", null);
-```
-
-Typed values are views over the unified payload: `Ticker`, `Order`, `Trade`, ... implement `Map<String, Object>` (`OHLCV` implements `List<Object>`), so `ticker.get("info")`, `exchange.json(ticker)` and passing a typed value to any map-accepting API all work; the public fields are the typed projection.
-
-
-See [java/examples/](https://github.com/ccxt/ccxt/tree/master/java/examples) for more usage examples.
-
-### Rust
-
-[ccxt in Rust with **crates.io**](https://crates.io/crates/ccxt) ([docs.rs](https://docs.rs/ccxt))
-
-```shell
-cargo add ccxt tokio --features tokio/full
-cargo add ccxt-pro
-```
-
-```toml
-[dependencies]
-ccxt = "4.5.75"
-ccxt-pro = "4.5.75"
-tokio = { version = "1", features = ["full"] }
-```
-
-`ccxt` carries the REST exchanges; `ccxt-pro` adds the WebSocket (`watch*`) ones and is only needed if you stream. Both are async and expect a Tokio runtime.
-
-By default every exchange is compiled, which needs about 19 GB of RAM for a fresh debug build (50 GB in release). Each exchange is also a cargo feature named after its id, so disable the defaults and list only the ones you use — the same names on every ccxt crate:
-
-```toml
-[dependencies]
-ccxt = { version = "4.5.75", default-features = false, features = ["binance", "kraken"] }
-ccxt-pro = { version = "4.5.75", default-features = false, features = ["binance"] }
-```
-
-With three exchanges a fresh build takes ~30 s and 2.5 GB instead of minutes and tens of GB (see [rust/BUILD-BENCHMARK.md](rust/BUILD-BENCHMARK.md)). A derived exchange pulls in its parent (`binanceus` → `binance`), `ccxt-prediction` has its own list (`polymarket`, `kalshi`, …), and `from_id` only knows the exchanges compiled in.
-
-```rust
-use ccxt::{Binance, Params};
-
-let mut exchange = Binance::new(None);
-exchange.load_markets(false).await;
-
-let ticker = exchange.fetch_ticker("BTC/USDT", Params::none()).await?;
-println!("{} {:?}", ticker.symbol, ticker.last);
-```
-
-
-### Docker
-
-You can get CCXT installed in a container along with all the supported languages and dependencies. This may be useful if you want to contribute to CCXT (e.g. run the build scripts and tests — please see the [Contributing](https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md) document for the details on that).
-
-Using `docker-compose` (in the cloned CCXT repository):
-
-```shell
-docker-compose run --rm ccxt
-```
-
-You don't need the Docker image if you're not going to develop CCXT. If you just want to use CCXT – just install it as a regular package into your project.
-
----
-
-## AI Assistant Support
-
-CCXT provides language-specific skills for AI coding assistants (Claude Code, Cursor, Copilot, Windsurf, Codex, and 30+ others):
-
-```bash
-npx skills add ccxt/ccxt
-```
-
-See [AI Skills documentation](https://github.com/ccxt/ccxt/wiki/AI-Skills) and [llms.txt](https://raw.githubusercontent.com/ccxt/ccxt/master/llms.txt) for more details.
-
----
 
 ## Usage
-
-### Intro
-
-The CCXT library consists of a public part and a private part. Anyone can use the public part immediately after installation. Public APIs provide unrestricted access to public information for all exchange markets without the need to register a user account or have an API key.
-
-Public APIs include the following:
-
-- market data
-- instruments/trading pairs
-- price feeds (exchange rates)
-- order books
-- trade history
-- tickers
-- OHLC(V) for charting
-- other public endpoints
-
-In order to trade with private APIs you need to obtain API keys from an exchange's website. It usually means signing up to the exchange and creating API keys for your account. Some exchanges require personal info or identification. Sometimes verification may be necessary as well. In this case you will need to register yourself, this library will not create accounts or API keys for you. Some exchanges expose API endpoints for registering an account, but most exchanges don't. You will have to sign up and create API keys on their websites.
-
-Private APIs allow the following:
-
-- manage personal account info
-- query account balances
-- trade by making market and limit orders
-- deposit and withdraw fiat and crypto funds
-- query personal orders
-- get ledger history
-- transfer funds between accounts
-- use merchant services
-
-This library implements full public and private REST and WebSocket APIs for all exchanges in TypeScript, JavaScript, PHP and Python.
-
-The CCXT library supports both camelcase notation (preferred in TypeScript and JavaScript) and underscore notation (preferred in Python and PHP), therefore all methods can be called in either notation or coding style in any language.
-
-```JavaScript
-// both of these notations work in JavaScript/Python/PHP
-exchange.methodName ()  // camelcase pseudocode
-exchange.method_name () // underscore pseudocode
-```
-
-Read the [Manual](https://github.com/ccxt/ccxt/wiki/) and see [examples](https://github.com/ccxt/ccxt/tree/master/examples) for more details.
-
-### JavaScript
-
-**CCXT now supports ESM and CJS modules**
-
-#### CJS
-
-```JavaScript
-// cjs example
-'use strict';
-const ccxt = require ('ccxt');
-
-(async function () {
-    let kraken    = new ccxt.kraken ()
-    let bitfinex  = new ccxt.bitfinex ({ verbose: true })
-    let huobipro  = new ccxt.huobipro ()
-    let okcoinusd = new ccxt.okcoin ({
-        apiKey: 'YOUR_PUBLIC_API_KEY',
-        secret: 'YOUR_SECRET_PRIVATE_KEY',
-    })
-
-    const exchangeId = 'binance'
-        , exchangeClass = ccxt[exchangeId]
-        , exchange = new exchangeClass ({
-            'apiKey': 'YOUR_API_KEY',
-            'secret': 'YOUR_SECRET',
-        })
-
-    console.log (kraken.id,    await kraken.loadMarkets ())
-    console.log (bitfinex.id,  await bitfinex.loadMarkets  ())
-    console.log (huobipro.id,  await huobipro.loadMarkets ())
-
-    console.log (kraken.id,    await kraken.fetchOrderBook (kraken.symbols[0]))
-    console.log (bitfinex.id,  await bitfinex.fetchTicker ('BTC/USD'))
-    console.log (huobipro.id,  await huobipro.fetchTrades ('ETH/USDT'))
-
-    console.log (okcoinusd.id, await okcoinusd.fetchBalance ())
-
-    // sell 1 BTC/USD for market price, sell a bitcoin for dollars immediately
-    console.log (okcoinusd.id, await okcoinusd.createMarketSellOrder ('BTC/USD', 1))
-
-    // buy 1 BTC/USD for $2500, you pay $2500 and receive ฿1 when the order is closed
-    console.log (okcoinusd.id, await okcoinusd.createLimitBuyOrder ('BTC/USD', 1, 2500.00))
-
-    // pass/redefine custom exchange-specific order params: type, amount, price or whatever
-    // use a custom order type
-    bitfinex.createLimitSellOrder ('BTC/USD', 1, 10, { 'type': 'trailing-stop' })
-
-}) ();
-```
-#### ESM
-
-```Javascript
-//esm example
-import {version, binance} from 'ccxt';
-
-console.log(version);
-const exchange = new binance();
-const ticker = await exchange.fetchTicker('BTC/USDT');
-console.log(ticker);
-```
 
 ### Python
 
 ```Python
-# coding=utf-8
-
 import ccxt
 
-hitbtc   = ccxt.hitbtc({'verbose': True})
-bitmex   = ccxt.bitmex()
-huobipro = ccxt.huobipro()
-exmo     = ccxt.exmo({
-    'apiKey': 'YOUR_PUBLIC_API_KEY',
-    'secret': 'YOUR_SECRET_PRIVATE_KEY',
-})
-kraken = ccxt.kraken({
-    'apiKey': 'YOUR_PUBLIC_API_KEY',
-    'secret': 'YOUR_SECRET_PRIVATE_KEY',
-})
-
-exchange_id = 'binance'
-exchange_class = getattr(ccxt, exchange_id)
-exchange = exchange_class({
+exchange = ccxt.binance({
     'apiKey': 'YOUR_API_KEY',
     'secret': 'YOUR_SECRET',
 })
 
-hitbtc_markets = hitbtc.load_markets()
+markets = exchange.load_markets()
+print(exchange.fetch_order_book('BTC/USDT'))
+print(exchange.fetch_ticker('BTC/USDT'))
+print(exchange.fetch_balance())
 
-print(hitbtc.id, hitbtc_markets)
-print(bitmex.id, bitmex.load_markets())
-print(huobipro.id, huobipro.load_markets())
-
-print(hitbtc.fetch_order_book(hitbtc.symbols[0]))
-print(bitmex.fetch_ticker('BTC/USD'))
-print(huobipro.fetch_trades('LTC/USDT'))
-
-print(exmo.fetch_balance())
-
-# sell one ฿ for market price and receive $ right now
-print(exmo.id, exmo.create_market_sell_order('BTC/USD', 1))
-
-# limit buy BTC/EUR, you pay €2500 and receive ฿1  when the order is closed
-print(exmo.id, exmo.create_limit_buy_order('BTC/EUR', 1, 2500.00))
-
-# pass/redefine custom exchange-specific order params: type, amount, price, flags, etc...
-kraken.create_market_buy_order('BTC/USD', 1, {'trading_agreement': 'agree'})
+# limit buy 0.001 BTC at 60000 USDT
+print(exchange.create_limit_buy_order('BTC/USDT', 0.001, 60000))
 ```
 
-### PHP
+Streaming order books over WebSocket:
 
-```PHP
-include 'ccxt.php';
+```Python
+import asyncio
+import ccxt.pro as ccxtpro
 
-$poloniex = new \ccxt\poloniex ();
-$bittrex  = new \ccxt\bittrex  (array ('verbose' => true));
-$quoinex  = new \ccxt\quoinex   ();
-$zaif     = new \ccxt\zaif     (array (
-    'apiKey' => 'YOUR_PUBLIC_API_KEY',
-    'secret' => 'YOUR_SECRET_PRIVATE_KEY',
-));
-$hitbtc   = new \ccxt\hitbtc   (array (
-    'apiKey' => 'YOUR_PUBLIC_API_KEY',
-    'secret' => 'YOUR_SECRET_PRIVATE_KEY',
-));
+async def main():
+    exchange = ccxtpro.hyperliquid()
+    try:
+        while True:
+            orderbook = await exchange.watch_order_book('BTC/USDC:USDC')
+            print(orderbook['bids'][0], orderbook['asks'][0])
+    finally:
+        await exchange.close()
 
-$exchange_id = 'binance';
-$exchange_class = "\\ccxt\\$exchange_id";
-$exchange = new $exchange_class (array (
-    'apiKey' => 'YOUR_API_KEY',
-    'secret' => 'YOUR_SECRET',
-));
-
-$poloniex_markets = $poloniex->load_markets ();
-
-var_dump ($poloniex_markets);
-var_dump ($bittrex->load_markets ());
-var_dump ($quoinex->load_markets ());
-
-var_dump ($poloniex->fetch_order_book ($poloniex->symbols[0]));
-var_dump ($bittrex->fetch_trades ('BTC/USD'));
-var_dump ($quoinex->fetch_ticker ('ETH/EUR'));
-var_dump ($zaif->fetch_ticker ('BTC/JPY'));
-
-var_dump ($zaif->fetch_balance ());
-
-// sell 1 BTC/JPY for market price, you pay ¥ and receive ฿ immediately
-var_dump ($zaif->id, $zaif->create_market_sell_order ('BTC/JPY', 1));
-
-// buy BTC/JPY, you receive ฿1 for ¥285000 when the order closes
-var_dump ($zaif->id, $zaif->create_limit_buy_order ('BTC/JPY', 1, 285000));
-
-// set a custom user-defined id to your order
-$hitbtc->create_order ('BTC/USD', 'limit', 'buy', 1, 3000, array ('clientOrderId' => '123'));
-```
-
-### .net/C#
-
-```C#
-using ccxt; // importing ccxt
-namespace Project;
-class Project {
-    public async static Task CreateOrder() {
-        var exchange = new Binance();
-        exchange.apiKey = "my api key";
-        exchange.secret = "my secret";
-        // always use the capitalized method (CreateOrder instead of createOrder)
-        var order = await exchange.CreateOrder("BTC/USDT", "limit", "buy", 1, 50);
-        Console.WriteLine("Placed Order, order id: " + order.id);
-    }
-}
+asyncio.run(main())
 ```
 
 ### Go
 
 ```Go
 package main
+
 import (
-	"github.com/ccxt/ccxt/go/v4/go"
 	"fmt"
+
+	ccxt "github.com/ccxt/ccxt/go/v4"
 )
 
 func main() {
@@ -732,472 +303,24 @@ func main() {
 		"apiKey": "MY KEY",
 		"secret": "MY SECRET",
 	})
-	orderParams := map[string]interface{}{
-		"clientOrderId": "myOrderId68768678",
-	}
+	exchange.LoadMarkets()
 
-    exchange.LoadMarkets()
-
-	order, err := exchange.CreateOrder("BTC/USDT", "limit", "buy", 0.001, ccxt.WithCreateOrderPrice(6000), ccxt.WithCreateOrderParams(orderParams))
-	if err != nil {
-		if ccxtError, ok := err.(*ccxt.Error); ok {
-			if ccxtError.Type == "InvalidOrder" {
-				fmt.Println("Invalid order")
-			} else {
-				fmt.Println("Some other error")
-			}
-		}
-	} else {
-		fmt.Println(*order.Id)
-	}
-
-
-    // fetching OHLCV
 	ohlcv, err := exchange.FetchOHLCV("BTC/USDT", ccxt.WithFetchOHLCVTimeframe("5m"), ccxt.WithFetchOHLCVLimit(100))
-
 	if err != nil {
 		fmt.Println("Error: ", err)
-	} else {
-		fmt.Println("Got OHLCV!")
+		return
 	}
+	fmt.Println(len(ohlcv), "candles")
 }
 ```
 
-#### Optional parameters
+Go has no optional parameters, so CCXT's optional arguments are passed as `WithX` option functions, for example `ccxt.WithFetchMyTradesSymbol("BTC/USDT")`. More examples are in [`examples/go`](examples/go).
 
-Unlike Javascript/Python/PHP/C# Go does not support "traditional" optional parameters like `function a(optional = false)`. However, the CCXT language and structure have some methods with optional params, and since the Go language is transpiled from the Typescript source, we had to find a way of representing them.
+For the full API (unified methods, market and order structures, error handling, rate limiting, WebSocket methods) see the [CCXT Manual](https://github.com/ccxt/ccxt/wiki/Manual). It applies to CCXT-turbo unchanged.
 
-We have decided to "go" (pun intended) with Option structs and the `WithX` methods.
+## Syncing with upstream
 
-For example, this function `FetchMyTrades` supports 4 different "optional" parameters, symbol, since, limit, and params.
-
-```Golang
-func (this *Binance) FetchMyTrades(options ...FetchMyTradesOptions) ([]Trade, error)
-```
-
-And we can provide them by doing
-
-```Golang
-trades, error := exchange.FetchMyTrades(ccxt.withFetchMyTradesSymbol("BTC/USDT"), ccxt.WithFetchOHLCVLimit(5), ccxt.WithFetchMyTradesParams(orderParams))
-```
-
-Lastly, just because the signature dictates that some argument like `symbol` is optional, it will depend from exchange to exchange and you might need to provide it to avoid getting a `SymbolRequired` error.
-
-You can check different examples in the `examples/go` folder.
-
-### Java
-
-```Java
-import io.github.ccxt.exchanges.Kraken;
-import io.github.ccxt.exchanges.Bitfinex;
-import io.github.ccxt.exchanges.Binance;
-import io.github.ccxt.types.*;
-
-import java.util.HashMap;
-import java.util.Map;
-
-public class Example {
-    public static void main(String[] args) {
-        // Create exchange instances
-        Kraken kraken = new Kraken();
-        Bitfinex bitfinex = new Bitfinex();
-
-        Map<String, Object> config = new HashMap<>();
-        config.put("apiKey", "YOUR_API_KEY");
-        config.put("secret", "YOUR_SECRET");
-        Binance binance = new Binance(config);
-
-        // Load markets
-        kraken.loadMarkets(false);
-        binance.loadMarkets(false);
-
-        // Public API
-        OrderBook orderBook = kraken.fetchOrderBook("BTC/USDT");
-        Ticker ticker = bitfinex.fetchTicker("BTC/USD");
-        System.out.println(ticker.symbol + " last=" + ticker.last);
-
-        // Fetch OHLCV
-        var candles = binance.fetchOHLCV("BTC/USDT", "1h", null, 10L, null);
-        System.out.println("Got " + candles.size() + " candles");
-
-        // Private API (requires API keys)
-        Balances balance = binance.fetchBalance();
-        System.out.println("BTC free: " + balance.free.get("BTC"));
-
-        // Place a limit buy order
-        Order order = binance.createLimitBuyOrder("BTC/USDT", 0.001, 50000.0);
-        System.out.println("Order id: " + order.id + " status: " + order.status);
-
-        // Cancel it
-        binance.cancelOrder(order.id, "BTC/USDT", null);
-    }
-}
-```
-
-#### Async
-
-All methods are also available as async variants returning `CompletableFuture`:
-
-```Java
-import java.util.concurrent.CompletableFuture;
-
-// Fire multiple requests concurrently
-CompletableFuture<Ticker> btc = binance.fetchTickerAsync("BTC/USDT", null);
-CompletableFuture<Ticker> eth = binance.fetchTickerAsync("ETH/USDT", null);
-CompletableFuture.allOf(btc, eth).join();
-System.out.println("BTC: " + btc.get().last + " ETH: " + eth.get().last);
-```
-
-#### Error handling
-
-Typed sync methods throw the underlying ccxt error directly — no `CompletionException`
-unwrap needed. Catch exceptions in standard JDK order (most-specific first), like you
-would with any other Java library:
-
-```Java
-import io.github.ccxt.errors.*;
-import io.github.ccxt.exchanges.Binance;
-import io.github.ccxt.types.Order;
-
-Binance binance = new Binance(Map.of("apiKey", "...", "secret", "..."));
-try {
-    Order order = binance.createOrder("BTC/USDT", "limit", "buy", 0.001, 50000.0);
-} catch (InsufficientFunds e) {
-    // user error — show balance, don't retry
-} catch (InvalidOrder e) {                        // covers OrderNotFound, DuplicateOrderId, …
-    // user error — fix params
-} catch (AuthenticationError e) {                 // covers PermissionDenied, AccountSuspended
-    // refresh credentials
-} catch (RateLimitExceeded | DDoSProtection e) {  // multi-catch (Java 7+)
-    Thread.sleep(30_000);
-} catch (NetworkError e) {                        // RequestTimeout, ExchangeNotAvailable, …
-    Thread.sleep(2_000);                          // transient — retry
-} catch (ExchangeError e) {                       // any other exchange-side error
-    // exchange refused
-} catch (BaseError e) {                           // ccxt catch-all
-    // unknown ccxt error
-}
-```
-
-For async methods, `CompletableFuture` wraps thrown errors in `CompletionException`
-(JDK behaviour). Use `Helpers.unwrap()` inside `.exceptionally(...)` to peel the wrap
-and pattern-match the real cause:
-
-```Java
-import io.github.ccxt.Helpers;
-
-binance.createOrderAsync("BTC/USDT", "limit", "buy", 0.001, 50000.0)
-    .thenAccept(order -> log.info("placed " + order.id))
-    .exceptionally(throwable -> {
-        Throwable cause = Helpers.unwrap(throwable);
-        return switch (cause) {
-            case InsufficientFunds    e -> { notifyUser(e); yield null; }
-            case AuthenticationError  e -> { refreshCreds(); yield null; }
-            case RateLimitExceeded    e -> { scheduleRetry(); yield null; }
-            case NetworkError         e -> { scheduleRetry(); yield null; }
-            case BaseError            e -> { log.error("ccxt", e); yield null; }
-            default -> throw new java.util.concurrent.CompletionException(cause);
-        };
-    });
-```
-
-The full hierarchy lives under `io.github.ccxt.errors` — see the [Error Handling
-section of the Manual](https://github.com/ccxt/ccxt/wiki/Manual#error-handling)
-for the complete tree (NetworkError vs ExchangeError, retry-safe vs user-error
-categories, etc.).
-
-#### WebSocket
-
-WebSocket support is available via the pro exchange classes:
-
-```Java
-import io.github.ccxt.Exchange;
-import io.github.ccxt.exchanges.pro.Binance;
-
-import java.util.concurrent.TimeUnit;
-
-Exchange exchange = new Binance();
-exchange.loadMarkets().join();
-
-// stream live ticker updates
-for (int i = 0; i < 10; i++) {
-    Object ticker = exchange.watchTicker("BTC/USDT").get(30, TimeUnit.SECONDS);
-    System.out.println(ticker);
-}
-```
-
-You can check different examples in the `java/examples` folder.
-
-### Rust
-
-Every exchange has a typed wrapper returning native Rust types — `Ticker`, `Order`, `Market`, `OrderBook` — instead of a dynamic value. Methods are `async` and return `Result<T, ExchangeError>`.
-
-```rust
-use ccxt::{Binance, Config, Params};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut exchange = Binance::with_config(
-        Config::new()
-            .api_key("MY KEY")
-            .secret("MY SECRET"),
-    );
-    exchange.load_markets(false).await;
-
-    let order = exchange
-        .create_order("BTC/USDT", "limit", "buy", 0.001, Some(50000.0), Params::none())
-        .await?;
-    println!("{:?}", order.id);
-    Ok(())
-}
-```
-
-#### Configuration and parameters
-
-Neither construction nor the trailing `params` argument requires touching a dynamic value — both are builders over Rust primitives. `Config` nests `options` exactly as the other bindings do.
-
-```rust
-use ccxt::{Binance, Config, Params};
-
-let mut exchange = Binance::with_config(
-    Config::new()
-        .api_key("MY KEY")
-        .secret("MY SECRET")
-        .sandbox(true)
-        .enable_rate_limit(true)
-        .option_str("defaultType", "swap")
-        .option("fetchMarkets", Params::new().with_strs("types", &["spot", "linear"])),
-);
-
-let order = exchange
-    .create_order(
-        "BTC/USDT",
-        "limit",
-        "buy",
-        0.001,
-        Some(50000.0),
-        Params::new()
-            .with_str("clientOrderId", "myOrderId68768678")
-            .with_bool("postOnly", true)
-            .with_str("timeInForce", "GTC"),
-    )
-    .await?;
-```
-
-Settings can also be changed after construction; the setters chain.
-
-```rust
-exchange.set_verbose(true);
-exchange.set_sandbox_mode(true);
-```
-
-#### Markets
-
-Market metadata is typed too, so trading rules can be checked before sending an order without any extra request.
-
-```rust
-let market = exchange.market("BTC/USDT")?;
-println!("{} {}", market.symbol, market.market_type);
-println!("{:?} {:?}", market.limits.amount.min, market.limits.cost.min);
-println!("{:?}", market.precision.amount);
-
-let swaps: Vec<_> = exchange.markets().into_iter().filter(|m| m.swap && m.active).collect();
-println!("{}", swaps.len());
-```
-
-#### Error handling
-
-Errors arrive as `ExchangeError` carrying a `kind` plus an `is()` test that walks the unified hierarchy, so one handler covers a whole family — `is("InvalidOrder")` also matches `OrderNotFound` and `DuplicateOrderId`, `is("NetworkError")` also matches `RequestTimeout` and `RateLimitExceeded`.
-
-```rust
-match exchange.create_order("BTC/USDT", "limit", "buy", 0.001, Some(50000.0), Params::none()).await {
-    Ok(order) => println!("{:?}", order.id),
-    Err(e) if e.is("InsufficientFunds") => println!("not enough balance"),
-    Err(e) if e.is("InvalidOrder") => println!("bad parameters: {}", e.message),
-    Err(e) if e.is("AuthenticationError") => println!("check credentials"),
-    Err(e) if e.is("RateLimitExceeded") => tokio::time::sleep(Duration::from_secs(30)).await,
-    Err(e) if e.is("NetworkError") => tokio::time::sleep(Duration::from_secs(2)).await,
-    Err(e) => println!("{} {}", e.kind, e.message),
-}
-```
-
-#### Choosing an exchange at runtime
-
-`from_id_with_config` builds any supported venue from its id, and the typed API is still available through the trait object.
-
-```rust
-use ccxt::{from_id_with_config, Config, Params, TypedExchangeExt};
-
-for id in ["binance", "bybit", "okx"] {
-    let Some(mut exchange) = from_id_with_config(id, Config::new()) else { continue };
-    exchange.load_markets(false).await;
-
-    let market = exchange.market("BTC/USDT")?;
-    let ticker = exchange.fetch_ticker("BTC/USDT", Params::none()).await?;
-    println!("{id} {:?} {:?}", ticker.last, market.limits.cost.min);
-}
-```
-
-#### WebSocket
-
-WebSocket support lives in the `ccxt-pro` crate, with the same typed returns.
-
-```rust
-use ccxt::Params;
-use ccxt_pro::Binance;
-
-let mut exchange = Binance::new(None);
-exchange.load_markets(false).await;
-
-loop {
-    let orderbook = exchange.watch_order_book("BTC/USDT", Some(10), Params::none()).await?;
-    println!("{:?} {:?}", orderbook.bids.first(), orderbook.asks.first());
-}
-```
-
-```rust
-let symbols = vec!["BTC/USDT".to_string(), "ETH/USDT".to_string()];
-let trades = exchange.watch_trades_for_symbols(symbols, None, None, Params::none()).await?;
-```
-
-You can check different examples in the `examples/rust` folder.
-
-## Rate limiting
-
-Crypto exchanges enforce rate limits to protect their infrastructure, ensure fair usage across all clients, and prevent abuse that could degrade performance or availability for other users. That means you can't make an unlimited amount of requests to the exchange, there is a rate that needs to be respected.
-
-By default, CCXT uses a **leaky bucket** rate limiter to control the pace of outgoing requests. A leaky bucket rate limiter works by queueing requests and releasing them at a steady, fixed rate. Bursts of requests are smoothed out over time rather than executed immediately.
-
-However, if the user provides a `rateLimiterAlgorithm': 'rollingWindow'` option, ccxt switches from the leaky bucket model to a **window-based rate** limiter. A window-based limiter enforces a maximum number of requests within a fixed time window (for example, N requests per X milliseconds). Once the limit is reached, further requests are delayed until the current window expires. By default CCXT assumes a 60s window but the window size can be customized by providing `rollingWindowSize: X0000` ms.
-
-Example:
-```Python
-exchange = ccxt.binance({
-    'rateLimiterAlgorithm': 'rollingWindow', # switching to rolling window algorithm
-    'rollingWindowSize': 5000 # if binance allows X requests per 5 seconds, those requests can be fired in a burst at any time during this window
-})
-```
-
-## CCXT CLI
-
-Read the documentation for more information and details: [docs](https://github.com/ccxt/ccxt/tree/master/cli/README.md)
-
-CCXT also provides a command-line interface (CLI) that enables direct interaction with any supported exchange from the terminal. You can quickly check balances, place orders, or fetch trade data - all of that without the need to write or execute custom code and without the overhead of building an entire application from scratch. This is especially useful for simple or time-sensitive tasks (shell scripting, testing and debugging among other things).
-
-### Installation
-
-The CLI is available as a npm package and can be installed by doing
-
-```
-npm i ccxt-cli -g
-```
-
-### Usage
-
-You can use the `--help` option to view a general overview of how the CLI works. The tool allows you to invoke any CCXT method by specifying the exchange id, the methodName, and any required arguments.
-
-Examples:
-
-```
-ccxt binance createOrder BTC/USDT market buy 0.1 // places an order
-```
-If you are not sure which arguments should be provided you can always use the `explain` command.
-
-```
-ccxt explain createOrder
-```
-
-result:
-
-```
-Method: createOrder
-Usage:
-  binance createOrder <symbol> <type> <side> <amount> [price] [params]
-
-Arguments:
-  - symbol       (required) — Market symbol e.g., BTC/USDT
-  - type         (required) — (no description available)
-  - side         (required) — order side e.g., buy or sell
-  - amount       (required) — (no description available)
-  - price        (optional) — Price per unit of asset e.g., 26000.50
-  - params       (optional) — Extra parameters for the exchange e.g., { "recvWindow": 5000 }
-```
-
-You can easily provide API keys by setting them as environment varibales eg: `BINANCE_APIKEY="XXXX"` or adding them to the config file located at `$CACHE/config.json`
-
-## CCXT MCP Server
-
-Read the documentation for more information and details: [docs](https://github.com/ccxt/ccxt/tree/master/mcp/README.md)
-
-CCXT ships an official [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, so AI agents — Claude Desktop, Claude Code, Cursor, VS Code, Windsurf and any other MCP host — can access market data, balances, and (opt-in) trading on 100+ exchanges and prediction markets. It runs locally over stdio: your API keys stay on your machine and are never visible to the AI model, which references accounts by name only. Trading, withdrawals and raw endpoints are separate opt-in capability tiers, off by default, with confirmation flows, notional caps and an audit journal.
-
-```bash
-claude mcp add ccxt -- npx -y ccxt-mcp
-```
-
-Or in any host's MCP config:
-
-```json
-{ "mcpServers": { "ccxt": { "command": "npx", "args": ["-y", "ccxt-mcp"] } } }
-```
-
-## Contributing
-
-Please read the [CONTRIBUTING](https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md) document before making changes that you would like adopted in the code. Also, read the [Manual](https://github.com/ccxt/ccxt/wiki) for more details.
-
-## Support Developer Team
-
-We are investing a significant amount of time into the development of this library. If CCXT made your life easier and you want to help us improve it further, or if you want to speed up development of new features and exchanges, please support us with a tip. We appreciate all contributions!
-
-### Sponsors
-
-Support this project by becoming a sponsor.
-
-[[Become a sponsor](https://opencollective.com/ccxt#sponsor)]
-
-<a href="https://opencollective.com/ccxt/tiers/sponsor/0/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/0/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/1/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/1/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/2/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/2/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/3/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/3/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/4/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/4/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/5/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/5/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/6/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/6/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/7/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/7/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/8/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/8/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/sponsor/9/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/sponsor/9/avatar.svg"></a>
-
-### Supporters
-
-Support this project by becoming a supporter. Your avatar will show up here with a link to your website.
-
-[[Become a supporter](https://opencollective.com/ccxt#supporter)]
-
-<a href="https://opencollective.com/ccxt/tiers/supporter/0/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/0/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/1/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/1/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/2/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/2/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/3/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/3/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/4/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/4/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/5/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/5/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/6/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/6/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/7/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/7/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/8/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/8/avatar.svg"></a>
-<a href="https://opencollective.com/ccxt/tiers/supporter/9/website" target="_blank"><img src="https://opencollective.com/ccxt/tiers/supporter/9/avatar.svg"></a>
-
-### Backers
-
-Thank you to all our backers! [[Become a backer](https://opencollective.com/ccxt#backer)]
-
-<a href="https://opencollective.com/ccxt#backers" target="_blank"><img src="https://opencollective.com/ccxt/tiers/backer.svg?width=890"></a>
-
-Thank you!
-
-## Social
-
-- <sub>[![Twitter](https://img.shields.io/twitter/follow/ccxt_official?style=social)](https://twitter.com/ccxt_official)</sub> Follow us on Twitter
-- <sub>[![Medium](https://img.shields.io/badge/read-our%20blog-black?logo=medium)](https://medium.com/@ccxt)</sub> Read our blog on Medium
-- <sub>[![Discord](https://img.shields.io/discord/690203284119617602?logo=discord&logoColor=white)](https://discord.gg/dhzSKYU)</sub> Join our Discord
-- <sub>[![Telegram Announcements](https://img.shields.io/badge/CCXT-Channel-blue?logo=telegram)](https://t.me/ccxt_announcements)</sub> CCXT Channel on Telegram (important announcements)
-- <sub>[![Telegram Chat](https://img.shields.io/badge/CCXT-Chat-blue?logo=telegram)](https://t.me/ccxt_chat)</sub> CCXT Chat on Telegram (technical support)
+`scripts/sync-upstream.sh` merges `ccxt/ccxt` `master` into this fork, drops the language directories CCXT-turbo does not ship, and keeps this README. Run it from a clean checkout of `master`, check the result, then push.
 
 ## Disclaimer
 
@@ -1210,7 +333,3 @@ CCXT is not a service nor a server. CCXT is a software. **CCXT is a free open so
 - **Open source** means anyone is allowed to use it, to look inside the code and to change everything, including other brokers.
 
 *CCXT has joined Hyperliquid’s Builder Codes program (see announcement) and may also utilize its referral code, which offers users a 4% fee discount on their first 25 million in trading volume.*
-
-## Contact Us
-
-For business inquiries: info@ccxt.trade
