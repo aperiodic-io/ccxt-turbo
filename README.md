@@ -1,4 +1,16 @@
-# CCXT – CryptoCurrency eXchange Trading Library
+# CCXT-turbo – a faster, performance-optimized CCXT
+
+**CCXT-turbo** is a performance-focused fork of [CCXT](https://github.com/ccxt/ccxt). It keeps CCXT's unified API and exchange coverage, and speeds up the hot paths in trading and market-data workloads: WebSocket message handling, order book maintenance, and trade and ticker parsing.
+
+- **Faster.** We profile the code paths that run on every message, such as `safe*` field lookups, order book snapshots and level parsing, and optimize them. Each optimization is checked against the original implementation on randomized inputs, so results do not change.
+- **Same functionality.** It is a drop-in replacement. Package names, imports, method signatures, and return structures match upstream CCXT, so existing code and the [CCXT Manual](https://github.com/ccxt/ccxt/wiki) apply without changes.
+- **Kept up to date.** This fork tracks [`ccxt/ccxt`](https://github.com/ccxt/ccxt) `master` and syncs regularly. New exchanges, endpoints, and fixes from upstream arrive here, with the performance work layered on top.
+
+Performance work is proposed as pull requests on [aperiodic-io/ccxt-turbo](https://github.com/aperiodic-io/ccxt-turbo/pulls). Changes that aren't performance-related (new exchanges, API fixes) belong upstream at [ccxt/ccxt](https://github.com/ccxt/ccxt), and reach CCXT-turbo on the next sync.
+
+---
+
+The rest of this README is the upstream CCXT documentation, which applies to CCXT-turbo as-is.
 
 [![NPM Downloads](https://img.shields.io/npm/dy/ccxt.svg)](https://www.npmjs.com/package/ccxt) [![npm](https://img.shields.io/npm/v/ccxt.svg)](https://npmjs.com/package/ccxt) [![PyPI](https://img.shields.io/pypi/v/ccxt.svg)](https://pypi.python.org/pypi/ccxt) [![NuGet version](https://img.shields.io/nuget/v/ccxt)](https://www.nuget.org/packages/ccxt) [![GoDoc](https://img.shields.io/github/v/tag/ccxt/ccxt?label=go)](https://godoc.org/github.com/ccxt/ccxt/go/v4) [![Mvn](https://badges.mvnrepository.com/badge/io.github.ccxt/ccxt/badge.svg?label=mvn)](https://mvnrepository.com/artifact/io.github.ccxt/ccxt) [![Packagist](https://img.shields.io/packagist/v/ccxt/ccxt)](https://packagist.org/packages/ccxt/ccxt) [![Crates.io](https://img.shields.io/crates/v/ccxt.svg)](https://crates.io/crates/ccxt) [![Supported Exchanges](https://img.shields.io/badge/exchanges-104-blue.svg)](https://github.com/ccxt/ccxt/wiki/Exchange-Markets) [![CCXT Chat in Telegram](https://telegram-badge.vercel.app/api/telegram-badge?channelId=@ccxt_chat&label=chat)](https://t.me/ccxt_chat) [![CCXT Discord Server](https://img.shields.io/discord/690203284119617602?logo=discord&logoColor=white)](https://discord.gg/ccxt) [![Follow CCXT at x.com](https://img.shields.io/twitter/follow/ccxt_official.svg?style=social&label=CCXT)](https://x.com/ccxt_official)
 
