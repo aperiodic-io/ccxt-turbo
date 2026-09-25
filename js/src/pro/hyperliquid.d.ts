@@ -104,6 +104,15 @@ export default class hyperliquid extends hyperliquidRest {
     unWatchOrderBook(symbol: string, params?: {}): Promise<any>;
     handleOrderBook(client: Client, message: Dict): void;
     /**
+     * @ignore
+     * @method
+     * @name hyperliquid#parseHyperliquidBookLevels
+     * @description converts a raw l2Book levels array (objects with "px"/"sz" numeric-string fields) into unified [price, amount] pairs
+     * @param {object[]} levels raw level objects for one side of the book
+     * @returns {float[][]} a list of [price, amount] pairs
+     */
+    parseHyperliquidBookLevels(levels: any[]): Num[][];
+    /**
      * @method
      * @name hyperliquid#watchTicker
      * @see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions

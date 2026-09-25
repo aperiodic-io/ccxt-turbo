@@ -314,12 +314,22 @@ export default class hyperliquid extends hyperliquidRest {
         const market = this.market (marketId);
         const symbol = market['symbol'];
         const rawData = this.safeList (entry, 'levels', []);
-        const data: Dict = {
-            'bids': this.safeList (rawData, 0, []),
-            'asks': this.safeList (rawData, 1, []),
-        };
+        const bids = this.parseHyperliquidBookLevels (this.safeList (rawData, 0, []));
+        const asks = this.parseHyperliquidBookLevels (this.safeList (rawData, 1, []));
         const timestamp = this.safeInteger (entry, 'time');
-        const snapshot = this.parseOrderBook (data, symbol, timestamp, 'bids', 'asks', 'px', 'sz');
+        // build the snapshot directly from the already-parsed [price, amount]
+        // pairs (mirrors parseOrderBook's own output shape exactly) instead
+        // of routing them back through the generic parseOrderBook /
+        // parseOrderBookBidAsk / safeFloat pipeline, which would re-parse
+        // values parseHyperliquidBookLevels has already parsed
+        const snapshot: Dict = {
+            'symbol': symbol,
+            'bids': this.sortBy (bids, 0, true),
+            'asks': this.sortBy (asks, 0),
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'nonce': undefined,
+        };
         if (!(symbol in this.orderbooks)) {
             const ob = this.orderBook (snapshot);
             this.orderbooks[symbol] = ob;
@@ -328,6 +338,45 @@ export default class hyperliquid extends hyperliquidRest {
         orderbook.reset (snapshot);
         const messageHash = 'orderbook:' + symbol;
         client.resolve (orderbook, messageHash);
+    }
+
+    /**
+     * @ignore
+     * @method
+     * @name hyperliquid#parseHyperliquidBookLevels
+     * @description converts a raw l2Book levels array (objects with "px"/"sz" numeric-string fields) into unified [price, amount] pairs
+     * @param {object[]} levels raw level objects for one side of the book
+     * @returns {float[][]} a list of [price, amount] pairs
+     */
+    parseHyperliquidBookLevels (levels: any[]): Num[][] {
+        // fast path: every level is always a plain {"px": "...", "sz": "..."}
+        // object with numeric strings, so parse it directly instead of going
+        // through the generic (dict/array-agnostic, exception-tolerant)
+        // safeFloat machinery meant for arbitrary/unknown level shapes.
+        // `price !== price` is a NaN check (NaN is the only value unequal to
+        // itself, in both JS and Python) - a wrong/missing key just parses
+        // to NaN here rather than throwing, so this catches anything
+        // unexpected and falls back to the always-correct generic path for
+        // the whole batch.
+        try {
+            const result = [];
+            for (let i = 0; i < levels.length; i++) {
+                const level = levels[i];
+                const price = parseFloat (level['px']);
+                const amount = parseFloat (level['sz']);
+                if ((price !== price) || (amount !== amount)) {
+                    throw new ExchangeError ('unparsable hyperliquid book level');
+                }
+                result.push ([ price, amount ]);
+            }
+            return result;
+        } catch (e) {
+            const result = [];
+            for (let i = 0; i < levels.length; i++) {
+                result.push ([ this.safeFloat (levels[i], 'px'), this.safeFloat (levels[i], 'sz') ]);
+            }
+            return result;
+        }
     }
 
     /**

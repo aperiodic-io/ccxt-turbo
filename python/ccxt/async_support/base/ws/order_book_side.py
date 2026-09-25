@@ -9,6 +9,46 @@ from bisect import bisect_left
 """Performs a binary search when inserting keys in sorted order"""
 
 
+def _bulk_load(deltas, is_bid):
+    # fast path used when a full, pre-sorted snapshot (a REST fetch, or a
+    # full-book-per-message feed like hyperliquid's l2Book) is loaded in
+    # one shot: a single linear pass instead of N binary-search inserts.
+    # bails out (returns None) on anything that isn't a clean best-first
+    # run of strictly increasing/decreasing prices (with only an
+    # immediately-following zero-size delta allowed, to cancel the level
+    # just appended) - callers fall back to the slower, always-correct
+    # per-item store on a bail-out, so correctness never depends on
+    # exchanges actually sending sorted/deduped data.
+    result = []
+    seen = set()
+    for raw in deltas:
+        delta = list(raw)
+        price = delta[0]
+        size = delta[1]
+        if result and price == result[-1][0]:
+            if size:
+                result[-1] = delta
+            else:
+                result.pop()
+                seen.discard(price)
+            continue
+        if not size:
+            if price in seen:
+                # cancels a level that isn't the most recent one - a mid-list
+                # removal the fast path can't do cheaply; bail out
+                return None
+            continue
+        if result:
+            if is_bid:
+                if price > result[-1][0]:
+                    return None
+            elif price < result[-1][0]:
+                return None
+        result.append(delta)
+        seen.add(price)
+    return result
+
+
 class OrderBookSide(list):
     side = None  # set to True for bids and False for asks
 
@@ -17,8 +57,21 @@ class OrderBookSide(list):
         self._depth = depth or sys.maxsize
         # parallel to self
         self._index = []
-        for delta in deltas:
-            self.storeArray(list(delta))
+        if deltas:
+            self.merge_snapshot(deltas)
+
+    def merge_snapshot(self, deltas):
+        # fast path: bulk-load an already-sorted snapshot in one linear
+        # pass (no per-item binary search), then rebuild the parallel
+        # index in a single comprehension so subsequent incremental
+        # storeArray() calls keep working exactly as before
+        fast = _bulk_load(deltas, self.side)
+        if fast is not None:
+            self.extend(fast)
+            self._index = [(-d[0] if self.side else d[0]) for d in fast]
+        else:
+            for delta in deltas:
+                self.storeArray(list(delta))
 
     def store_array(self, delta):
         return self.storeArray(delta)
@@ -43,10 +96,9 @@ class OrderBookSide(list):
         self.storeArray([price, size])
 
     def limit(self):
-        difference = len(self) - self._depth
-        for _ in range(difference):
-            self.remove_index(self.pop())
-            self._index.pop()
+        if len(self) > self._depth:
+            del self[self._depth:]
+            del self._index[self._depth:]
 
     def remove_index(self, order):
         pass
@@ -75,6 +127,10 @@ class CountedOrderBookSide(OrderBookSide):
     def __init__(self, deltas=[], depth=None):
         super(CountedOrderBookSide, self).__init__(deltas, depth)
 
+    def merge_snapshot(self, deltas):
+        for delta in deltas:
+            self.storeArray(list(delta))
+
     def storeArray(self, delta):
         price = delta[0]
         size = delta[1]
@@ -97,6 +153,12 @@ class CountedOrderBookSide(OrderBookSide):
     def store(self, price, size, count):
         self.storeArray([price, size, count])
 
+    def limit(self):
+        difference = len(self) - self._depth
+        for _ in range(difference):
+            self.remove_index(self.pop())
+            self._index.pop()
+
 # -----------------------------------------------------------------------------
 # indexed by order ids (3rd value in a bidask delta)
 
@@ -105,6 +167,10 @@ class IndexedOrderBookSide(OrderBookSide):
     def __init__(self, deltas=[], depth=None):
         self._hashmap = {}
         super(IndexedOrderBookSide, self).__init__(deltas, depth)
+
+    def merge_snapshot(self, deltas):
+        for delta in deltas:
+            self.storeArray(list(delta))
 
     def storeArray(self, delta):
         price = delta[0]
@@ -154,6 +220,12 @@ class IndexedOrderBookSide(OrderBookSide):
             del keys[index]
             del self[index]
             del hashmap[order_id]
+
+    def limit(self):
+        difference = len(self) - self._depth
+        for _ in range(difference):
+            self.remove_index(self.pop())
+            self._index.pop()
 
     def remove_index(self, order):
         order_id = order[2]
